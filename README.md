@@ -1,7 +1,5 @@
 # Appliance Cycle
 
-[![hacs](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz)
-
 *[Italiano](README.it.md)*
 
 A Home Assistant integration that turns any **power sensor** (smart plug,
