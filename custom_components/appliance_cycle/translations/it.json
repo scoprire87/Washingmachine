@@ -1,0 +1,170 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Appliance Cycle",
+                "description": "Scegli il sensore che misura la potenza assorbita dall'elettrodomestico (ad esempio una presa smart).",
+                "data": {
+                    "name": "Nome",
+                    "power_sensor": "Sensore di potenza",
+                    "appliance": "Tipo di elettrodomestico"
+                },
+                "data_description": {
+                    "name": "Ad esempio «Lavastoviglie».",
+                    "power_sensor": "Sensore in watt, aggiornato almeno ogni pochi secondi durante il lavaggio.",
+                    "appliance": "Imposta le soglie di rilevamento iniziali; puoi cambiarle dalle opzioni."
+                }
+            }
+        },
+        "abort": {
+            "already_configured": "Questo sensore di potenza è già usato."
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Opzioni",
+                "data": {
+                    "notify_services": "Notifiche",
+                    "notify_before": "Avviso prima della fine",
+                    "finished_timeout": "Durata dello stato «finito»"
+                },
+                "data_description": {
+                    "notify_services": "Servizi di notifica a cui inviare un messaggio quando il ciclo finisce (ad esempio notify.mobile_app_telefono).",
+                    "notify_before": "Minuti prima della fine stimata in cui inviare un avviso (0 = nessun avviso).",
+                    "finished_timeout": "Dopo quanti minuti lo stato torna da «finito» a «inattivo» (0 = resta finito)."
+                },
+                "sections": {
+                    "detection": {
+                        "name": "Rilevamento",
+                        "data": {
+                            "idle_power": "Potenza a riposo",
+                            "start_power": "Potenza di avvio",
+                            "end_delay": "Attesa per la fine"
+                        },
+                        "data_description": {
+                            "idle_power": "Fino a questa potenza l'elettrodomestico è considerato fermo.",
+                            "start_power": "Un ciclo è considerato avviato solo se la potenza raggiunge questo valore (riscaldamento o motore); attività più deboli, come display o apertura della porta, vengono ignorate.",
+                            "end_delay": "Il ciclo è finito quando la potenza resta a riposo per questo tempo."
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "selector": {
+        "appliance": {
+            "options": {
+                "dishwasher": "Lavastoviglie",
+                "washing_machine": "Lavatrice",
+                "dryer": "Asciugatrice",
+                "other": "Altro"
+            }
+        }
+    },
+    "entity": {
+        "binary_sensor": {
+            "running": {
+                "name": "In funzione"
+            }
+        },
+        "sensor": {
+            "status": {
+                "name": "Stato",
+                "state": {
+                    "idle": "Inattivo",
+                    "running": "In funzione",
+                    "finished": "Finito"
+                }
+            },
+            "program": {
+                "name": "Programma"
+            },
+            "remaining_time": {
+                "name": "Tempo rimanente"
+            },
+            "end_time": {
+                "name": "Fine prevista"
+            },
+            "progress": {
+                "name": "Avanzamento"
+            },
+            "cycle_energy": {
+                "name": "Energia del ciclo"
+            }
+        }
+    },
+    "exceptions": {
+        "unknown_appliance": {
+            "message": "L'entità non appartiene a un elettrodomestico di Appliance Cycle."
+        },
+        "unknown_program": {
+            "message": "Programma «{program}» non trovato."
+        },
+        "no_cycle": {
+            "message": "Non è ancora stato registrato nessun ciclo."
+        }
+    },
+    "services": {
+        "import_history": {
+            "name": "Importa dallo storico",
+            "description": "Cerca i cicli nello storico del sensore di potenza e impara i programmi.",
+            "fields": {
+                "entity_id": {
+                    "name": "Elettrodomestico",
+                    "description": "Una qualsiasi entità dell'elettrodomestico (ad esempio il suo stato)."
+                },
+                "days": {
+                    "name": "Giorni",
+                    "description": "Quanti giorni di storico analizzare."
+                }
+            }
+        },
+        "rename_program": {
+            "name": "Rinomina programma",
+            "description": "Dà un nome a un programma appreso (se il nuovo nome esiste già, i due vengono uniti).",
+            "fields": {
+                "entity_id": {
+                    "name": "Elettrodomestico",
+                    "description": "Una qualsiasi entità dell'elettrodomestico (ad esempio il suo stato)."
+                },
+                "program": {
+                    "name": "Programma",
+                    "description": "Nome del programma, come appare nel sensore Programma."
+                },
+                "new_name": {
+                    "name": "Nuovo nome",
+                    "description": "Ad esempio «Eco» o «Intensivo»."
+                }
+            }
+        },
+        "delete_program": {
+            "name": "Elimina programma",
+            "description": "Dimentica un programma appreso e tutti i suoi cicli.",
+            "fields": {
+                "entity_id": {
+                    "name": "Elettrodomestico",
+                    "description": "Una qualsiasi entità dell'elettrodomestico (ad esempio il suo stato)."
+                },
+                "program": {
+                    "name": "Programma",
+                    "description": "Nome del programma, come appare nel sensore Programma."
+                }
+            }
+        },
+        "set_last_program": {
+            "name": "Correggi l'ultimo programma",
+            "description": "Indica quale programma era l'ultimo ciclo, se è stato riconosciuto male.",
+            "fields": {
+                "entity_id": {
+                    "name": "Elettrodomestico",
+                    "description": "Una qualsiasi entità dell'elettrodomestico (ad esempio il suo stato)."
+                },
+                "program": {
+                    "name": "Programma",
+                    "description": "Nome del programma, come appare nel sensore Programma."
+                }
+            }
+        }
+    }
+}

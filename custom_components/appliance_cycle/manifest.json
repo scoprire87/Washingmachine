@@ -1,0 +1,17 @@
+{
+    "domain": "appliance_cycle",
+    "name": "Appliance Cycle",
+    "after_dependencies": [
+        "recorder"
+    ],
+    "codeowners": [
+        "@scoprire87"
+    ],
+    "config_flow": true,
+    "documentation": "https://github.com/scoprire87/washingmachine",
+    "integration_type": "device",
+    "iot_class": "calculated",
+    "issue_tracker": "https://github.com/scoprire87/washingmachine/issues",
+    "requirements": [],
+    "version": "0.1.0"
+}

@@ -1,0 +1,170 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Appliance Cycle",
+                "description": "Choose the sensor measuring the power drawn by the appliance (for example a smart plug).",
+                "data": {
+                    "name": "Name",
+                    "power_sensor": "Power sensor",
+                    "appliance": "Appliance type"
+                },
+                "data_description": {
+                    "name": "For example “Dishwasher”.",
+                    "power_sensor": "Sensor in watts, updated at least every few seconds while running.",
+                    "appliance": "Sets the initial detection thresholds; you can change them in the options."
+                }
+            }
+        },
+        "abort": {
+            "already_configured": "This power sensor is already used."
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Options",
+                "data": {
+                    "notify_services": "Notifications",
+                    "notify_before": "Reminder before the end",
+                    "finished_timeout": "How long to show “finished”"
+                },
+                "data_description": {
+                    "notify_services": "Notify services that receive a message when the cycle ends (for example notify.mobile_app_phone).",
+                    "notify_before": "Minutes before the estimated end to send a reminder (0 = none).",
+                    "finished_timeout": "After how many minutes the status goes back from “finished” to “idle” (0 = stays finished)."
+                },
+                "sections": {
+                    "detection": {
+                        "name": "Detection",
+                        "data": {
+                            "idle_power": "Idle power",
+                            "start_power": "Start power",
+                            "end_delay": "End delay"
+                        },
+                        "data_description": {
+                            "idle_power": "Up to this power the appliance is considered off.",
+                            "start_power": "A cycle only counts once the power reaches this value (heater or motor); weaker activity, like the display or the door opening, is ignored.",
+                            "end_delay": "The cycle has ended when the power stays idle for this long."
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "selector": {
+        "appliance": {
+            "options": {
+                "dishwasher": "Dishwasher",
+                "washing_machine": "Washing machine",
+                "dryer": "Dryer",
+                "other": "Other"
+            }
+        }
+    },
+    "entity": {
+        "binary_sensor": {
+            "running": {
+                "name": "Running"
+            }
+        },
+        "sensor": {
+            "status": {
+                "name": "Status",
+                "state": {
+                    "idle": "Idle",
+                    "running": "Running",
+                    "finished": "Finished"
+                }
+            },
+            "program": {
+                "name": "Program"
+            },
+            "remaining_time": {
+                "name": "Remaining time"
+            },
+            "end_time": {
+                "name": "Estimated end"
+            },
+            "progress": {
+                "name": "Progress"
+            },
+            "cycle_energy": {
+                "name": "Cycle energy"
+            }
+        }
+    },
+    "exceptions": {
+        "unknown_appliance": {
+            "message": "The entity does not belong to an Appliance Cycle appliance."
+        },
+        "unknown_program": {
+            "message": "Program “{program}” not found."
+        },
+        "no_cycle": {
+            "message": "No cycle has been recorded yet."
+        }
+    },
+    "services": {
+        "import_history": {
+            "name": "Import from history",
+            "description": "Look for cycles in the history of the power sensor and learn the programs.",
+            "fields": {
+                "entity_id": {
+                    "name": "Appliance",
+                    "description": "Any entity of the appliance (for example its status)."
+                },
+                "days": {
+                    "name": "Days",
+                    "description": "How many days of history to scan."
+                }
+            }
+        },
+        "rename_program": {
+            "name": "Rename program",
+            "description": "Rename a learned program (if the new name exists, the two are merged).",
+            "fields": {
+                "entity_id": {
+                    "name": "Appliance",
+                    "description": "Any entity of the appliance (for example its status)."
+                },
+                "program": {
+                    "name": "Program",
+                    "description": "Program name, as shown by the Program sensor."
+                },
+                "new_name": {
+                    "name": "New name",
+                    "description": "For example “Eco” or “Intensive”."
+                }
+            }
+        },
+        "delete_program": {
+            "name": "Delete program",
+            "description": "Forget a learned program and all of its runs.",
+            "fields": {
+                "entity_id": {
+                    "name": "Appliance",
+                    "description": "Any entity of the appliance (for example its status)."
+                },
+                "program": {
+                    "name": "Program",
+                    "description": "Program name, as shown by the Program sensor."
+                }
+            }
+        },
+        "set_last_program": {
+            "name": "Correct the last program",
+            "description": "Set which program the last cycle was, if it was recognised wrongly.",
+            "fields": {
+                "entity_id": {
+                    "name": "Appliance",
+                    "description": "Any entity of the appliance (for example its status)."
+                },
+                "program": {
+                    "name": "Program",
+                    "description": "Program name, as shown by the Program sensor."
+                }
+            }
+        }
+    }
+}
