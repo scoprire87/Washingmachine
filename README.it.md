@@ -38,7 +38,15 @@ della configurazione e riavvia Home Assistant.
 | Sensore di potenza | un `sensor` con classe *potenza* (W o kW) |
 | Elettrodomestico | lavastoviglie, lavatrice, asciugatrice o altro: imposta soglie adatte |
 
-Poi da **Configura** scegli:
+Poi apri **Configura**. Il menu offre:
+
+- **Notifiche e rilevamento** (sotto);
+- **Rinomina un programma**, **Correggi il programma dell'ultimo ciclo**,
+  **Elimina un programma**;
+- **Impara da un log CSV**: carica un CSV scaricato dalla cronologia del
+  sensore di potenza (*Cronologia → ⋮ → Scarica dati*), anche dal telefono.
+
+Notifiche e rilevamento:
 
 | Opzione | Descrizione |
 | --- | --- |
@@ -73,7 +81,7 @@ apertura automatica della porta, ventola dopo la fine) vengono ignorate.
 
 **Apprendimento.** Ogni ciclo terminato viene salvato come profilo di
 consumo. Cicli con lo stesso profilo formano un programma (`Programma 1`,
-`Programma 2`, ...), che puoi rinominare con il servizio `rename_program`.
+`Programma 2`, ...), che puoi rinominare da **Configura**.
 
 **Tempo rimanente.** Durante il ciclo, il profilo fin qui viene allineato
 (dynamic time warping) con quelli appresi: il migliore indica il programma e
@@ -101,8 +109,9 @@ data:
 ```
 
 Se hai dei log esportati dallo storico (*Cronologia → ⋮ → Scarica dati*, un
-CSV per programma), copiali nella cartella di configurazione e caricali con il
-nome del programma:
+CSV per programma), caricali da **Configura → Impara da un log CSV** indicando
+il nome del programma, oppure copiali nella cartella di configurazione e usa il
+servizio:
 
 ```yaml
 action: appliance_cycle.import_file
@@ -112,7 +121,8 @@ data:
   program: Eco
 ```
 
-Poi guarda `known_programs` sul sensore programma e rinominali:
+Poi rinomina i programmi da **Configura → Rinomina un programma**, oppure con
+il servizio:
 
 ```yaml
 action: appliance_cycle.rename_program

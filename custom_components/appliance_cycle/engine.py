@@ -412,14 +412,13 @@ def read_history_csv(text: str) -> list[tuple[float, float]]:
     not numbers (``unavailable``, ``unknown``) are skipped. When the file
     holds several entities, the one with most readings is used.
     """
-    rows = list(csv.DictReader(io.StringIO(text.lstrip("\ufeff"))))
-    if not rows:
-        return []
-    columns = rows[0].keys()
+    reader = csv.DictReader(io.StringIO(text.lstrip("\ufeff")))
+    columns = reader.fieldnames or []
     time_column = next((c for c in _TIME_COLUMNS if c in columns), None)
     if time_column is None or "state" not in columns:
         raise ValueError("missing state / last_changed columns")
-    if "entity_id" in columns:
+    rows = list(reader)
+    if rows and "entity_id" in columns:
         entity = Counter(row["entity_id"] for row in rows).most_common(1)[0][0]
         rows = [row for row in rows if row["entity_id"] == entity]
 

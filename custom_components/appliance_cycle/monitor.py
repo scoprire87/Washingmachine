@@ -279,6 +279,10 @@ class ApplianceMonitor:
                 return handle.read()
 
         text = await self.hass.async_add_executor_job(_read)
+        return await self.async_import_text(text, program)
+
+    async def async_import_text(self, text: str, program: str | None) -> int:
+        """Learn the cycles of the content of a history CSV."""
         readings = read_history_csv(text)
         cycles = detect_cycles(readings, self._new_detector())
         return await self._async_learn_cycles(cycles, program)

@@ -24,6 +24,16 @@
         "step": {
             "init": {
                 "title": "Options",
+                "menu_options": {
+                    "settings": "Notifications and detection",
+                    "rename_program": "Rename a program",
+                    "set_last_program": "Correct the program of the last cycle",
+                    "import_file": "Learn from a CSV log",
+                    "delete_program": "Delete a program"
+                }
+            },
+            "settings": {
+                "title": "Notifications and detection",
                 "data": {
                     "notify_services": "Notifications",
                     "notify_before": "Reminder before the end",
@@ -49,7 +59,55 @@
                         }
                     }
                 }
+            },
+            "rename_program": {
+                "title": "Rename a program",
+                "description": "Known programs (runs × average duration, energy):\n{programs}\n\nIf the new name already exists, the two programs are merged.",
+                "data": {
+                    "program": "Program",
+                    "new_name": "New name"
+                }
+            },
+            "set_last_program": {
+                "title": "Correct the last cycle",
+                "description": "The last cycle ({started}, {duration} min) was recognised as **{program}**. Choose the right program, or type a new name.",
+                "data": {
+                    "program": "Program"
+                }
+            },
+            "import_file": {
+                "title": "Learn from a CSV log",
+                "description": "Upload a CSV downloaded from the history of the power sensor (History → ⋮ → Download data), with one or more cycles of the same program.",
+                "data": {
+                    "file": "CSV file",
+                    "program": "Program"
+                },
+                "data_description": {
+                    "program": "Name of the program in the log. Leave empty to recognise it automatically."
+                }
+            },
+            "delete_program": {
+                "title": "Delete a program",
+                "description": "Known programs:\n{programs}\n\nThe program and all its runs are forgotten.",
+                "data": {
+                    "program": "Program"
+                }
             }
+        },
+        "error": {
+            "empty_name": "The name cannot be empty.",
+            "unknown_program": "Program not found.",
+            "invalid_file": "The file is not a history CSV (columns state and last_changed are needed).",
+            "no_new_cycle": "No new cycle in the file (no complete cycle, or cycles already learned)."
+        },
+        "abort": {
+            "not_loaded": "The appliance is not loaded.",
+            "no_programs": "No program has been learned yet.",
+            "no_cycle": "No cycle has been recorded yet.",
+            "program_renamed": "“{program}” renamed to “{new_name}”.",
+            "last_program_set": "The last cycle is now “{program}”.",
+            "file_imported": "Learned {cycles} cycle(s). Known programs:\n{programs}",
+            "program_deleted": "Program “{program}” deleted."
         }
     },
     "selector": {
