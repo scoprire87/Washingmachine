@@ -13,6 +13,7 @@ from custom_components.appliance_cycle.engine import (
     classify,
     detect_cycles,
     estimate,
+    read_history_csv,
     resample,
     same_program,
 )
@@ -151,3 +152,53 @@ def test_profile_roundtrip(cycles):
     assert again.program == "Quick"
     assert again.duration == pytest.approx(profile.duration, abs=0.1)
     assert len(again.power) == len(profile.power)
+
+
+def _run(cycle, library):
+    """Feed a cycle bin by bin; yields (elapsed minutes, true remaining, estimate)."""
+    matcher = ProgramMatcher(library)
+    for i, power in enumerate(resample(cycle.samples, cycle.start, cycle.end)):
+        matcher.add_bin(power)
+        elapsed = (i + 1) * BIN_SECONDS
+        remaining, program, _ = estimate(matcher.matches())
+        yield elapsed / 60, (cycle.duration - elapsed) / 60, remaining, program
+
+
+def test_unknown_program_has_no_estimate(cycles):
+    """Only Eco is known: a quick program must not get Eco's remaining time."""
+    library = [cycles["eco"].profile("Eco")]
+    for minute, _, remaining, program in _run(cycles["eco_quick"], library):
+        if minute >= 5:
+            assert remaining is None and program is None, minute
+
+
+def test_second_run_of_a_program(cycles):
+    """A later real run of eco quick, recognised from the first one."""
+    second = detect_cycles(load_trace("eco_quick_2"), _detector())
+    assert len(second) == 1
+    library = [cycle.profile(name) for name, cycle in cycles.items()]
+    errors, programs = [], []
+    for minute, true_remaining, remaining, program in _run(second[0], library):
+        if minute >= 5:
+            errors.append(abs(remaining / 60 - true_remaining))
+            programs.append(program)
+    # quick shine looks alike for a moment around minute 16
+    assert sum(e < 2 for e in errors) >= 0.95 * len(errors)
+    assert programs.count("eco_quick") >= 0.95 * len(programs)
+    assert programs[-40:] == ["eco_quick"] * 40
+
+
+def test_read_history_csv():
+    text = (
+        "\ufeffentity_id,state,last_changed\n"
+        "sensor.plug_power,0,2026-11-14T12:00:00.000Z\n"
+        "sensor.plug_power,unavailable,2026-11-14T12:00:10.000Z\n"
+        "sensor.other,99,2026-11-14T12:00:15.000Z\n"
+        "sensor.plug_power,1900.5,2026-11-14T12:00:20.000Z\n"
+        "sensor.plug_power,3,2026-11-14T12:00:30+01:00\n"
+    )
+    readings = read_history_csv(text)  # sensor.other ignored, sorted by time
+    assert [p for _, p in readings] == [3.0, 0.0, 1900.5]
+    assert readings[1][0] - readings[0][0] == 3600 - 30
+    with pytest.raises(ValueError):
+        read_history_csv("a,b\n1,2\n")

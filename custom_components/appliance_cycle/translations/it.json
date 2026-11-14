@@ -103,6 +103,15 @@
         },
         "no_cycle": {
             "message": "Non è ancora stato registrato nessun ciclo."
+        },
+        "file_not_allowed": {
+            "message": "Il file {file} è fuori dalla cartella di configurazione."
+        },
+        "file_not_readable": {
+            "message": "Impossibile leggere {file}: {error}"
+        },
+        "file_not_csv": {
+            "message": "{file} non è un CSV dello storico (servono le colonne state e last_changed)."
         }
     },
     "services": {
@@ -117,6 +126,24 @@
                 "days": {
                     "name": "Giorni",
                     "description": "Quanti giorni di storico analizzare."
+                }
+            }
+        },
+        "import_file": {
+            "name": "Importa da file",
+            "description": "Impara i cicli di un CSV esportato dallo storico di Home Assistant (entity_id, state, last_changed).",
+            "fields": {
+                "entity_id": {
+                    "name": "Elettrodomestico",
+                    "description": "Una qualsiasi entità dell'elettrodomestico (ad esempio il suo stato)."
+                },
+                "file": {
+                    "name": "File",
+                    "description": "Percorso del CSV, relativo alla cartella di configurazione."
+                },
+                "program": {
+                    "name": "Programma",
+                    "description": "Nome del programma registrato nel file. Se vuoto, il programma viene riconosciuto o ne viene creato uno nuovo."
                 }
             }
         },

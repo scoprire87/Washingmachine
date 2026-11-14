@@ -16,9 +16,13 @@ The engine works on the readings of a power sensor (W):
 """
 from __future__ import annotations
 
+import csv
+import io
 import math
+from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 BIN_SECONDS = 30.0
 # Power above which the log scale saturates (heaters are ~2 kW)
@@ -346,15 +350,25 @@ class ProgramMatcher:
         return found[0] if found else None
 
 
+# Above this distance the running cycle does not look like any known run: it
+# is a program never seen before (calibrated on real dishwasher logs: runs of
+# a known program score below 0.1 from the second minute, a program compared
+# only with very different ones 0.25 or more).
+NO_MATCH_SCORE = 0.15
+
+
 def estimate(matches: Sequence[Match]) -> tuple[float | None, str | None, float]:
     """Remaining seconds, program and confidence (0-1) from the matches.
+
+    Nothing is estimated while no known run resembles the cycle (a program
+    that has not been learned yet).
 
     The confidence compares the best match with the best match of a
     different program. When it is high, the remaining time is a weighted
     average (weight 1/score²) of the best runs of the recognised program;
     when it is low, of the best candidates of any program.
     """
-    if not matches:
+    if not matches or matches[0].score > NO_MATCH_SCORE:
         return None, None, 0.0
     best = matches[0]
     other = next(
@@ -381,6 +395,46 @@ def estimate(matches: Sequence[Match]) -> tuple[float | None, str | None, float]
 def _program_key(match: Match) -> object:
     """Unlabelled runs count as programs of their own."""
     return match.profile.program or id(match.profile)
+
+
+# ---------------------------------------------------------------------------
+# Readings exported from Home Assistant
+# ---------------------------------------------------------------------------
+
+_TIME_COLUMNS = ("last_changed", "last_updated", "time", "timestamp")
+
+
+def read_history_csv(text: str) -> list[tuple[float, float]]:
+    """Readings of a CSV exported from the Home Assistant history.
+
+    Expected columns: ``entity_id`` (optional), ``state`` and one of
+    ``last_changed`` / ``last_updated`` / ``time`` (ISO 8601). Rows that are
+    not numbers (``unavailable``, ``unknown``) are skipped. When the file
+    holds several entities, the one with most readings is used.
+    """
+    rows = list(csv.DictReader(io.StringIO(text.lstrip("\ufeff"))))
+    if not rows:
+        return []
+    columns = rows[0].keys()
+    time_column = next((c for c in _TIME_COLUMNS if c in columns), None)
+    if time_column is None or "state" not in columns:
+        raise ValueError("missing state / last_changed columns")
+    if "entity_id" in columns:
+        entity = Counter(row["entity_id"] for row in rows).most_common(1)[0][0]
+        rows = [row for row in rows if row["entity_id"] == entity]
+
+    readings: list[tuple[float, float]] = []
+    for row in rows:
+        try:
+            power = float(row["state"])
+            moment = datetime.fromisoformat(row[time_column])
+        except (TypeError, ValueError):
+            continue
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=UTC)
+        readings.append((moment.timestamp(), power))
+    readings.sort()
+    return readings
 
 
 # ---------------------------------------------------------------------------

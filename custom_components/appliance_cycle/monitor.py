@@ -58,8 +58,10 @@ from .engine import (
     Profile,
     ProgramMatcher,
     classify,
+    detect_cycles,
     energy_wh,
     estimate,
+    read_history_csv,
     resample,
 )
 
@@ -258,20 +260,42 @@ class ApplianceMonitor:
         """Learn programs from the cycles found in the recorder history."""
         now = dt_util.utcnow()
         readings = await self.async_history(now - timedelta(days=days), now)
-        detector = CycleDetector(
-            self.detector.idle_power, self.detector.start_power, self.detector.end_delay
-        )
+        detector = self._new_detector()
         cycles: list[Cycle] = []
         for timestamp, power in readings:
             cycles.extend(c for kind, c in detector.update(timestamp, power) if kind == "finished")
         cycles.extend(c for kind, c in detector.tick(now.timestamp()) if kind == "finished")
 
-        known = {round(p.started) for p in self.profiles}
+        return await self._async_learn_cycles(cycles)
+
+    async def async_import_file(self, path: str, program: str | None) -> int:
+        """Learn the cycles of a CSV exported from the Home Assistant history.
+
+        With ``program`` every cycle of the file is stored under that name.
+        """
+
+        def _read() -> str:
+            with open(path, encoding="utf-8") as handle:
+                return handle.read()
+
+        text = await self.hass.async_add_executor_job(_read)
+        readings = read_history_csv(text)
+        cycles = detect_cycles(readings, self._new_detector())
+        return await self._async_learn_cycles(cycles, program)
+
+    def _new_detector(self) -> CycleDetector:
+        return CycleDetector(
+            self.detector.idle_power, self.detector.start_power, self.detector.end_delay
+        )
+
+    async def _async_learn_cycles(
+        self, cycles: list[Cycle], program: str | None = None
+    ) -> int:
         added = 0
         for cycle in cycles:
-            if any(abs(cycle.start - started) < 120 for started in known):
+            if any(abs(cycle.start - p.started) < 120 for p in self.profiles):
                 continue
-            self._learn(cycle.profile())
+            self._learn(cycle.profile(), program)
             added += 1
         if added:
             await self._async_save()
@@ -339,6 +363,9 @@ class ApplianceMonitor:
         self.energy = energy_wh(cycle.samples, cycle.start, now)
         remaining, program, confidence = estimate(self._matcher.matches())
         if remaining is None:
+            # a program not learned yet: better no estimate than a wrong one
+            self.remaining = self.end_time = self.progress = self.program = None
+            self.confidence = 0.0
             return
         # the estimate refers to the last complete bin
         remaining = max(0.0, remaining - (elapsed - self._bins_done * BIN_SECONDS))
@@ -391,12 +418,13 @@ class ApplianceMonitor:
     # ------------------------------------------------------------ learning
 
     @callback
-    def _learn(self, profile: Profile) -> str:
+    def _learn(self, profile: Profile, program: str | None = None) -> str:
         """Store a finished run and return its program name."""
         for known in self.profiles:
             if abs(known.started - profile.started) < 120:
                 return known.program or self._new_program_name()  # already learned
-        program = classify(profile, self.profiles)
+        if program is None:
+            program = classify(profile, self.profiles)
         if program is None:
             program = self._new_program_name()
         profile.program = program

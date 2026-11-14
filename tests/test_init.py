@@ -242,3 +242,51 @@ async def test_set_last_and_delete_program(hass, freezer):
             DOMAIN, "delete_program", {"entity_id": STATUS, "program": "Quick"}, blocking=True
         )
 
+
+
+async def test_import_file_and_unknown_program(hass, freezer, tmp_path):
+    hass.config.config_dir = str(tmp_path)
+    async_mock_service(hass, "notify", "phone")
+    await _setup(hass)
+
+    # only Eco is known: a quick program gets no (wrong) estimate
+    first, _ = _eco_runs()
+    await _replay(hass, freezer, first)
+    await _advance(hass, freezer, 240)
+    trace = load_trace("eco_quick_2")
+    await _replay(hass, freezer, trace, until=20 * 60)
+    assert hass.states.get(STATUS).state == "running"
+    assert hass.states.get(REMAINING).state == "unknown"
+    assert hass.states.get(PROGRAM).state == "unknown"
+    assert hass.states.get(END).state == "unknown"
+
+    # a log exported from the history of Home Assistant
+    start = dt_util.parse_datetime("2026-10-01T10:00:00+00:00")
+    lines = ["entity_id,state,last_changed"] + [
+        f"sensor.plug_power,{power},{(start + timedelta(seconds=s)).isoformat()}"
+        for s, power in load_trace("eco_quick")
+    ]
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "logs" / "eco_quick.csv").write_text("\n".join(lines) + "\n")
+    data = {"entity_id": STATUS, "file": "logs/eco_quick.csv", "program": "Eco quick"}
+    response = await hass.services.async_call(
+        DOMAIN, "import_file", data, blocking=True, return_response=True
+    )
+    assert response == {"cycles": 1}
+    assert await hass.services.async_call(
+        DOMAIN, "import_file", data, blocking=True, return_response=True
+    ) == {"cycles": 0}
+
+    # the running cycle is realigned with the new program
+    await _advance(hass, freezer, 60)
+    assert hass.states.get(PROGRAM).state == "Eco quick"
+    # the trace starts 3 minutes before the cycle: 18 of 69.5 minutes elapsed
+    remaining = float(hass.states.get(REMAINING).state)
+    assert abs(remaining - (69.5 - 18)) < 2
+
+    for bad, error in (("../outside.csv", "file_not_allowed"), ("logs/missing.csv", "file_not_readable")):
+        with pytest.raises(ServiceValidationError) as err:
+            await hass.services.async_call(
+                DOMAIN, "import_file", {"entity_id": STATUS, "file": bad}, blocking=True
+            )
+        assert err.value.translation_key == error
