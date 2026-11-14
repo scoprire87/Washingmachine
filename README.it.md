@@ -42,7 +42,10 @@ Poi apri **Configura**. Il menu offre:
 
 - **Notifiche e rilevamento** (sotto);
 - **Rinomina un programma**, **Correggi il programma dell'ultimo ciclo**,
-  **Elimina un programma**;
+  **Elimina programmi** (uno o più insieme);
+- **Carica i programmi preimpostati** (lavastoviglie): programmi registrati da
+  una lavastoviglie reale, utili se hai lo stesso modello. I programmi imparati
+  con un nome automatico che corrispondono a uno di questi ne prendono il nome;
 - **Impara da un log CSV**: carica un CSV scaricato dalla cronologia del
   sensore di potenza (*Cronologia → ⋮ → Scarica dati*), anche dal telefono.
 

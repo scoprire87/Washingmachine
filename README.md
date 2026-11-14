@@ -42,7 +42,10 @@ Then open **Configure** on the entry. The menu offers:
 
 - **Notifications and detection** (below);
 - **Rename a program**, **Correct the program of the last cycle**,
-  **Delete a program**;
+  **Delete programs** (one or more at once);
+- **Load the preset programs** (dishwasher): programs recorded from a real
+  dishwasher, useful if you have the same model. Learned programs with an
+  automatic name that match one of them take its name;
 - **Learn from a CSV log**: upload a CSV downloaded from the history of the
   power sensor (*History → ⋮ → Download data*), also from the phone.
 
