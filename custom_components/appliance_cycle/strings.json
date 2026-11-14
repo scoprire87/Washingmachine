@@ -29,7 +29,8 @@
                     "rename_program": "Rename a program",
                     "set_last_program": "Correct the program of the last cycle",
                     "import_file": "Learn from a CSV log",
-                    "delete_program": "Delete a program"
+                    "load_presets": "Load the preset programs",
+                    "delete_program": "Delete programs"
                 }
             },
             "settings": {
@@ -87,11 +88,15 @@
                 }
             },
             "delete_program": {
-                "title": "Delete a program",
-                "description": "Known programs:\n{programs}\n\nThe program and all its runs are forgotten.",
+                "title": "Delete programs",
+                "description": "Known programs:\n{programs}\n\nThe selected programs and all their runs are forgotten.",
                 "data": {
-                    "program": "Program"
+                    "program": "Programs"
                 }
+            },
+            "load_presets": {
+                "title": "Load the preset programs",
+                "description": "Programs recorded from a real dishwasher:\n{presets}\n\nUseful if you have the same model; they are recognised like learned programs and can be deleted at any time. Learned programs with an automatic name (“Program 2”) that match one of them take its name."
             }
         },
         "error": {
@@ -107,7 +112,9 @@
             "program_renamed": "“{program}” renamed to “{new_name}”.",
             "last_program_set": "The last cycle is now “{program}”.",
             "file_imported": "Learned {cycles} cycle(s). Known programs:\n{programs}",
-            "program_deleted": "Program “{program}” deleted."
+            "program_deleted": "Deleted: {program}. Known programs:\n{programs}",
+            "presets_loaded": "Added {added} runs; {renamed} learned runs took the name of a preset program. Known programs:\n{programs}",
+            "presets_already_loaded": "The preset programs are already loaded."
         }
     },
     "selector": {

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
@@ -61,11 +62,13 @@ from .engine import (
     detect_cycles,
     energy_wh,
     estimate,
+    load_presets,
     read_history_csv,
     resample,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
 
 STORAGE_VERSION = 1
 
@@ -87,6 +90,13 @@ MESSAGES = {
         "new_program": "Programma {n}",
     },
 }
+
+# Names given automatically to new programs, in any language
+_AUTO_NAME = re.compile(
+    "^(?:"
+    + "|".join(re.escape(m["new_program"]).replace(r"\{n\}", r"\d+") for m in MESSAGES.values())
+    + ")$"
+)
 
 
 def _messages(hass: HomeAssistant) -> dict[str, str]:
@@ -473,6 +483,40 @@ class ApplianceMonitor:
             info["duration"] = round(info["duration"] / info["runs"] / 60)
             info["energy"] = round(info["energy"] / info["runs"] / 1000, 2)
         return result
+
+    async def async_load_presets(self) -> tuple[int, int]:
+        """Add the bundled programs of this appliance type.
+
+        Returns the runs added and the learned runs whose automatic name
+        ("Program 2") was replaced by the matching preset program.
+        """
+        presets = await self.hass.async_add_executor_job(load_presets, self.appliance)
+        added = 0
+        for preset in presets:
+            if any(abs(preset.started - p.started) < 120 for p in self.profiles):
+                continue
+            self.profiles.append(preset)
+            added += 1
+        renamed = 0
+        if presets:
+            for profile in self.profiles:
+                if profile in presets or not _AUTO_NAME.match(profile.program or ""):
+                    continue
+                if (program := classify(profile, presets)) is not None:
+                    if self.program == profile.program:
+                        self.program = program
+                    if self.last_cycle and self.last_cycle.get("started") and abs(
+                        dt_util.parse_datetime(self.last_cycle["started"]).timestamp()
+                        - profile.started
+                    ) < 120:
+                        self.last_cycle["program"] = program
+                    profile.program = program
+                    renamed += 1
+        if added or renamed:
+            self._matcher_needs_rebuild()
+            await self._async_save()
+            self._notify_listeners()
+        return added, renamed
 
     async def async_rename_program(self, program: str, new_name: str) -> bool:
         found = False

@@ -33,6 +33,7 @@ from .const import (
     DOMAIN,
     SECTION_DETECTION,
 )
+from .engine import has_presets, load_presets
 
 if TYPE_CHECKING:
     from .monitor import ApplianceMonitor
@@ -41,6 +42,7 @@ STEP_RENAME = "rename_program"
 STEP_LAST = "set_last_program"
 STEP_IMPORT = "import_file"
 STEP_DELETE = "delete_program"
+STEP_PRESETS = "load_presets"
 FIELD_PROGRAM = "program"
 FIELD_NEW_NAME = "new_name"
 FIELD_FILE = "file"
@@ -155,10 +157,11 @@ class ApplianceCycleOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        return self.async_show_menu(
-            step_id="init",
-            menu_options=["settings", STEP_RENAME, STEP_LAST, STEP_IMPORT, STEP_DELETE],
-        )
+        menu = ["settings", STEP_RENAME, STEP_LAST, STEP_IMPORT, STEP_DELETE]
+        appliance = self.config_entry.data.get(CONF_APPLIANCE, APPLIANCES[0])
+        if await self.hass.async_add_executor_job(has_presets, appliance):
+            menu.insert(4, STEP_PRESETS)
+        return self.async_show_menu(step_id="init", menu_options=menu)
 
     # ------------------------------------------------------------ settings
 
@@ -314,20 +317,63 @@ class ApplianceCycleOptionsFlow(OptionsFlow):
         programs = self._programs()
         if not programs:
             return self.async_abort(reason="no_programs")
-        if user_input is not None and await monitor.async_delete_program(
-            user_input[FIELD_PROGRAM]
-        ):
-            return self.async_abort(
-                reason="program_deleted",
-                description_placeholders={"program": user_input[FIELD_PROGRAM]},
-            )
+        if user_input is not None:
+            deleted = [
+                program
+                for program in user_input[FIELD_PROGRAM]
+                if await monitor.async_delete_program(program)
+            ]
+            if deleted:
+                return self.async_abort(
+                    reason="program_deleted",
+                    description_placeholders={
+                        "program": ", ".join(deleted), "programs": _describe(monitor)
+                    },
+                )
         schema = vol.Schema(
-            {vol.Required(FIELD_PROGRAM): _program_selector(programs, custom=False)}
+            {
+                vol.Required(FIELD_PROGRAM): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=programs,
+                        multiple=True,
+                        mode=selector.SelectSelectorMode.LIST,
+                    )
+                )
+            }
         )
         return self.async_show_form(
             step_id=STEP_DELETE,
             data_schema=schema,
             description_placeholders={"programs": _describe(monitor)},
+        )
+
+    async def async_step_load_presets(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if (monitor := self._monitor()) is None:
+            return self.async_abort(reason="not_loaded")
+        if user_input is not None:
+            added, renamed = await monitor.async_load_presets()
+            if not added and not renamed:
+                return self.async_abort(reason="presets_already_loaded")
+            return self.async_abort(
+                reason="presets_loaded",
+                description_placeholders={
+                    "added": str(added), "renamed": str(renamed),
+                    "programs": _describe(monitor),
+                },
+            )
+        presets = await self.hass.async_add_executor_job(load_presets, monitor.appliance)
+        names: dict[str, list[float]] = {}
+        for preset in presets:
+            names.setdefault(preset.program or "?", []).append(preset.duration)
+        lines = "\n".join(
+            f"- {name}: {round(sum(d) / len(d) / 60)} min" for name, d in names.items()
+        )
+        return self.async_show_form(
+            step_id=STEP_PRESETS,
+            data_schema=vol.Schema({}),
+            description_placeholders={"presets": lines},
         )
 
 

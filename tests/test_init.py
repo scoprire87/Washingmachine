@@ -372,6 +372,46 @@ async def test_manage_programs_from_the_options(hass, freezer, tmp_path):
     result = await _options_step(hass, entry, "set_last_program", {"program": "Eco 2"})
     assert result["reason"] == "last_program_set"
     assert hass.states.get(STATUS).attributes["last_cycle"]["program"] == "Eco 2"
-    result = await _options_step(hass, entry, "delete_program", {"program": "Eco rapido"})
+    result = await _options_step(hass, entry, "delete_program", {"program": ["Eco rapido"]})
     assert result["reason"] == "program_deleted"
     assert set(hass.states.get(PROGRAM).attributes["known_programs"]) == {"Eco 2"}
+
+
+async def test_load_preset_programs(hass, freezer):
+    async_mock_service(hass, "notify", "phone")
+    entry = await _setup(hass)
+    first, _ = _eco_runs()
+    await _replay(hass, freezer, first)
+    await _advance(hass, freezer, 240)
+    assert hass.states.get(PROGRAM).state == "Program 1"
+
+    menu = await hass.config_entries.options.async_init(entry.entry_id)
+    assert "load_presets" in menu["menu_options"]
+    form = await _options_step(hass, entry, "load_presets")
+    assert "- Eco rapido: 69 min" in form["description_placeholders"]["presets"]
+    result = await _options_step(hass, entry, "load_presets", {})
+    assert result["reason"] == "presets_loaded"
+    assert result["description_placeholders"]["added"] == "10"
+    assert result["description_placeholders"]["renamed"] == "1"
+    # the learned eco run took the name of the preset
+    assert hass.states.get(PROGRAM).state == "Eco"
+    known = hass.states.get(PROGRAM).attributes["known_programs"]
+    assert set(known) == {
+        "Bicchieri", "Completo", "Eco", "Eco rapido", "Intenso", "Intenso schizzino",
+        "Quick Shine", "Rapido",
+    }
+    assert known["Eco"]["runs"] == 3
+    again = await _options_step(hass, entry, "load_presets", {})
+    assert again["reason"] == "presets_already_loaded"
+
+    # a new eco quick run is recognised right away
+    await _replay(hass, freezer, load_trace("eco_quick_2"), until=33 * 60)
+    assert hass.states.get(PROGRAM).state == "Eco rapido"
+    assert abs(float(hass.states.get(REMAINING).state) - (69.5 - 30)) < 2
+
+    # several programs can be deleted at once
+    result = await _options_step(
+        hass, entry, "delete_program", {"program": ["Bicchieri", "Rapido"]}
+    )
+    assert result["reason"] == "program_deleted"
+    assert "Rapido" not in hass.states.get(PROGRAM).attributes["known_programs"]

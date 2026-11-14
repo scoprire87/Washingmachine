@@ -18,11 +18,13 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import math
 from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 
 BIN_SECONDS = 30.0
 # Power above which the log scale saturates (heaters are ~2 kW)
@@ -434,6 +436,26 @@ def read_history_csv(text: str) -> list[tuple[float, float]]:
         readings.append((moment.timestamp(), power))
     readings.sort()
     return readings
+
+
+# ---------------------------------------------------------------------------
+# Bundled programs
+# ---------------------------------------------------------------------------
+
+PRESETS = Path(__file__).parent / "presets"
+
+
+def has_presets(appliance: str) -> bool:
+    return (PRESETS / f"{appliance}.json").is_file()
+
+
+def load_presets(appliance: str) -> list[Profile]:
+    """Programs recorded from a real appliance of this type (blocking I/O)."""
+    path = PRESETS / f"{appliance}.json"
+    if not path.is_file():
+        return []
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return [Profile.from_dict(item) for item in data["programs"]]
 
 
 # ---------------------------------------------------------------------------

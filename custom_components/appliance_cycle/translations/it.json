@@ -29,7 +29,8 @@
                     "rename_program": "Rinomina un programma",
                     "set_last_program": "Correggi il programma dell'ultimo ciclo",
                     "import_file": "Impara da un log CSV",
-                    "delete_program": "Elimina un programma"
+                    "load_presets": "Carica i programmi preimpostati",
+                    "delete_program": "Elimina programmi"
                 }
             },
             "settings": {
@@ -87,11 +88,15 @@
                 }
             },
             "delete_program": {
-                "title": "Elimina un programma",
-                "description": "Programmi conosciuti:\n{programs}\n\nIl programma e tutti i suoi lavaggi vengono dimenticati.",
+                "title": "Elimina programmi",
+                "description": "Programmi conosciuti:\n{programs}\n\nI programmi selezionati e tutti i loro lavaggi vengono dimenticati.",
                 "data": {
-                    "program": "Programma"
+                    "program": "Programmi"
                 }
+            },
+            "load_presets": {
+                "title": "Carica i programmi preimpostati",
+                "description": "Programmi registrati da una lavastoviglie reale:\n{presets}\n\nUtili se hai lo stesso modello: vengono riconosciuti come quelli imparati e puoi eliminarli quando vuoi. I programmi imparati con un nome automatico («Programma 2») che corrispondono a uno di questi ne prendono il nome."
             }
         },
         "error": {
@@ -107,7 +112,9 @@
             "program_renamed": "«{program}» rinominato in «{new_name}».",
             "last_program_set": "L'ultimo ciclo ora è «{program}».",
             "file_imported": "Imparati {cycles} cicli. Programmi conosciuti:\n{programs}",
-            "program_deleted": "Programma «{program}» eliminato."
+            "program_deleted": "Eliminati: {program}. Programmi conosciuti:\n{programs}",
+            "presets_loaded": "Aggiunti {added} lavaggi; {renamed} lavaggi imparati hanno preso il nome di un programma preimpostato. Programmi conosciuti:\n{programs}",
+            "presets_already_loaded": "I programmi preimpostati sono già caricati."
         }
     },
     "selector": {
