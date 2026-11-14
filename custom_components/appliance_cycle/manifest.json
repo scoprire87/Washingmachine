@@ -8,10 +8,13 @@
         "@scoprire87"
     ],
     "config_flow": true,
+    "dependencies": [
+        "file_upload"
+    ],
     "documentation": "https://github.com/scoprire87/washingmachine",
     "integration_type": "device",
     "iot_class": "calculated",
     "issue_tracker": "https://github.com/scoprire87/washingmachine/issues",
     "requirements": [],
-    "version": "0.2.0"
+    "version": "0.3.0"
 }

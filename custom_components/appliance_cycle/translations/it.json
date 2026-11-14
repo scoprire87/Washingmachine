@@ -24,6 +24,16 @@
         "step": {
             "init": {
                 "title": "Opzioni",
+                "menu_options": {
+                    "settings": "Notifiche e rilevamento",
+                    "rename_program": "Rinomina un programma",
+                    "set_last_program": "Correggi il programma dell'ultimo ciclo",
+                    "import_file": "Impara da un log CSV",
+                    "delete_program": "Elimina un programma"
+                }
+            },
+            "settings": {
+                "title": "Notifiche e rilevamento",
                 "data": {
                     "notify_services": "Notifiche",
                     "notify_before": "Avviso prima della fine",
@@ -49,7 +59,55 @@
                         }
                     }
                 }
+            },
+            "rename_program": {
+                "title": "Rinomina un programma",
+                "description": "Programmi conosciuti (lavaggi × durata media, energia):\n{programs}\n\nSe il nuovo nome esiste già, i due programmi vengono uniti.",
+                "data": {
+                    "program": "Programma",
+                    "new_name": "Nuovo nome"
+                }
+            },
+            "set_last_program": {
+                "title": "Correggi l'ultimo ciclo",
+                "description": "L'ultimo ciclo ({started}, {duration} min) è stato riconosciuto come **{program}**. Scegli il programma giusto o scrivi un nome nuovo.",
+                "data": {
+                    "program": "Programma"
+                }
+            },
+            "import_file": {
+                "title": "Impara da un log CSV",
+                "description": "Carica un CSV scaricato dalla cronologia del sensore di potenza (Cronologia → ⋮ → Scarica dati), con uno o più cicli dello stesso programma.",
+                "data": {
+                    "file": "File CSV",
+                    "program": "Programma"
+                },
+                "data_description": {
+                    "program": "Nome del programma registrato nel log. Lascia vuoto per riconoscerlo in automatico."
+                }
+            },
+            "delete_program": {
+                "title": "Elimina un programma",
+                "description": "Programmi conosciuti:\n{programs}\n\nIl programma e tutti i suoi lavaggi vengono dimenticati.",
+                "data": {
+                    "program": "Programma"
+                }
             }
+        },
+        "error": {
+            "empty_name": "Il nome non può essere vuoto.",
+            "unknown_program": "Programma non trovato.",
+            "invalid_file": "Il file non è un CSV della cronologia (servono le colonne state e last_changed).",
+            "no_new_cycle": "Nessun ciclo nuovo nel file (nessun ciclo completo, o cicli già imparati)."
+        },
+        "abort": {
+            "not_loaded": "L'elettrodomestico non è caricato.",
+            "no_programs": "Non è ancora stato imparato nessun programma.",
+            "no_cycle": "Non è ancora stato registrato nessun ciclo.",
+            "program_renamed": "«{program}» rinominato in «{new_name}».",
+            "last_program_set": "L'ultimo ciclo ora è «{program}».",
+            "file_imported": "Imparati {cycles} cicli. Programmi conosciuti:\n{programs}",
+            "program_deleted": "Programma «{program}» eliminato."
         }
     },
     "selector": {

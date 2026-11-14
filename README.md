@@ -38,7 +38,15 @@ of your configuration and restart Home Assistant.
 | Power sensor | a `sensor` with device class *power* (W or kW) |
 | Appliance | dishwasher, washing machine, dryer or other: sets sensible detection thresholds |
 
-Then open **Configure** on the entry to choose:
+Then open **Configure** on the entry. The menu offers:
+
+- **Notifications and detection** (below);
+- **Rename a program**, **Correct the program of the last cycle**,
+  **Delete a program**;
+- **Learn from a CSV log**: upload a CSV downloaded from the history of the
+  power sensor (*History → ⋮ → Download data*), also from the phone.
+
+Notifications and detection:
 
 | Option | Description |
 | --- | --- |
@@ -71,7 +79,7 @@ drying fan after the end) is ignored.
 
 **Learning.** Every finished cycle is stored as a power profile. Cycles with
 the same profile are grouped into one program (`Program 1`, `Program 2`, ...).
-Give them meaningful names with the `rename_program` service.
+Give them meaningful names from **Configure**.
 
 **Remaining time.** While a cycle runs, its profile so far is aligned (dynamic
 time warping) with the learned runs: the best match gives the program and how
@@ -99,8 +107,9 @@ data:
 ```
 
 If you have logs exported from the history (*History → ⋮ → Download data*,
-one CSV per program), copy them in the configuration folder and load them with
-the name of the program:
+one CSV per program), upload them from **Configure → Learn from a CSV log**
+with the name of the program, or copy them in the configuration folder and use
+the service:
 
 ```yaml
 action: appliance_cycle.import_file
@@ -110,7 +119,8 @@ data:
   program: Eco
 ```
 
-Then look at `known_programs` on the program sensor and rename them:
+Then rename the programs from **Configure → Rename a program**, or with the
+service:
 
 ```yaml
 action: appliance_cycle.rename_program

@@ -1,7 +1,9 @@
 """Tests of the Appliance Cycle integration in Home Assistant."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
 from homeassistant import config_entries
@@ -110,6 +112,10 @@ async def test_config_flow(hass):
     assert again["type"] == FlowResultType.ABORT
 
     options = await hass.config_entries.options.async_init(entry.entry_id)
+    assert options["type"] == FlowResultType.MENU
+    options = await hass.config_entries.options.async_configure(
+        options["flow_id"], {"next_step_id": "settings"}
+    )
     assert options["type"] == FlowResultType.FORM
     options = await hass.config_entries.options.async_configure(
         options["flow_id"],
@@ -290,3 +296,82 @@ async def test_import_file_and_unknown_program(hass, freezer, tmp_path):
                 DOMAIN, "import_file", {"entity_id": STATUS, "file": bad}, blocking=True
             )
         assert err.value.translation_key == error
+
+
+UPLOAD_ID = "8a1f5c3e-0b6d-4c2a-9e7f-3d5b1a2c4e6f"
+
+
+async def _options_step(hass, entry, step, data=None):
+    flow = await hass.config_entries.options.async_init(entry.entry_id)
+    flow = await hass.config_entries.options.async_configure(
+        flow["flow_id"], {"next_step_id": step}
+    )
+    if data is None or flow["type"] != FlowResultType.FORM:
+        return flow
+    return await hass.config_entries.options.async_configure(flow["flow_id"], data)
+
+
+async def test_manage_programs_from_the_options(hass, freezer, tmp_path):
+    async_mock_service(hass, "notify", "phone")
+    entry = await _setup(hass)
+    for step in ("rename_program", "delete_program"):
+        result = await _options_step(hass, entry, step)
+        assert result["type"] == FlowResultType.ABORT and result["reason"] == "no_programs"
+
+    first, _ = _eco_runs()
+    await _replay(hass, freezer, first)
+    await _advance(hass, freezer, 240)
+    assert hass.states.get(PROGRAM).state == "Program 1"
+
+    # rename from the UI
+    form = await _options_step(hass, entry, "rename_program")
+    assert form["type"] == FlowResultType.FORM
+    assert "Program 1: 1 ×" in form["description_placeholders"]["programs"]
+    result = await _options_step(
+        hass, entry, "rename_program", {"program": "Program 1", "new_name": " Eco "}
+    )
+    assert result["type"] == FlowResultType.ABORT and result["reason"] == "program_renamed"
+    assert hass.states.get(PROGRAM).state == "Eco"
+    assert entry.state is ConfigEntryState.LOADED
+
+    # upload a CSV log of another program
+    start = dt_util.parse_datetime("2026-10-01T10:00:00+00:00")
+    csv_file = tmp_path / "upload.csv"
+    csv_file.write_text("\n".join(
+        ["entity_id,state,last_changed"] + [
+            f"sensor.plug_power,{power},{(start + timedelta(seconds=s)).isoformat()}"
+            for s, power in load_trace("eco_quick")
+        ]
+    ))
+
+    @contextmanager
+    def uploaded(_hass, file_id):
+        assert file_id == UPLOAD_ID
+        yield csv_file
+
+    with patch(
+        "custom_components.appliance_cycle.config_flow.process_uploaded_file", uploaded
+    ):
+        result = await _options_step(
+            hass, entry, "import_file", {"file": UPLOAD_ID, "program": "Eco rapido"}
+        )
+        assert result["type"] == FlowResultType.ABORT and result["reason"] == "file_imported"
+        assert "Eco rapido: 1 ×" in result["description_placeholders"]["programs"]
+        again = await _options_step(hass, entry, "import_file", {"file": UPLOAD_ID})
+        assert again["errors"] == {"base": "no_new_cycle"}
+    csv_file.write_text("not,a,log\n")
+    with patch(
+        "custom_components.appliance_cycle.config_flow.process_uploaded_file", uploaded
+    ):
+        bad = await _options_step(hass, entry, "import_file", {"file": UPLOAD_ID})
+    assert bad["errors"] == {"base": "invalid_file"}
+    known = hass.states.get(PROGRAM).attributes["known_programs"]
+    assert set(known) == {"Eco", "Eco rapido"}
+
+    # correct the last cycle, then delete a program
+    result = await _options_step(hass, entry, "set_last_program", {"program": "Eco 2"})
+    assert result["reason"] == "last_program_set"
+    assert hass.states.get(STATUS).attributes["last_cycle"]["program"] == "Eco 2"
+    result = await _options_step(hass, entry, "delete_program", {"program": "Eco rapido"})
+    assert result["reason"] == "program_deleted"
+    assert set(hass.states.get(PROGRAM).attributes["known_programs"]) == {"Eco 2"}
