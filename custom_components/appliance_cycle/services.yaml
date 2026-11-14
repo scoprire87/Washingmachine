@@ -15,6 +15,23 @@ import_history:
           unit_of_measurement: d
           mode: box
 
+import_file:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: appliance_cycle
+    file:
+      required: true
+      example: "dishwasher/eco.csv"
+      selector:
+        text:
+    program:
+      example: "Eco"
+      selector:
+        text:
+
 rename_program:
   fields:
     entity_id:

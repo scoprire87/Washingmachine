@@ -75,8 +75,10 @@ Give them meaningful names with the `rename_program` service.
 
 **Remaining time.** While a cycle runs, its profile so far is aligned (dynamic
 time warping) with the learned runs: the best match gives the program and how
-far into it the cycle is. Until a program has been learned, the remaining
-time is unknown.
+far into it the cycle is. While the cycle does not look like any learned
+program (a program never run before), the remaining time and the program stay
+*unknown* rather than showing the estimate of a different program; the new
+program is learned when the cycle ends.
 
 Tested on real dishwasher traces (9 programs, leave-one-out): the program is
 recognised from about half of the cycle and the estimated end is typically
@@ -96,6 +98,18 @@ data:
   days: 10
 ```
 
+If you have logs exported from the history (*History → ⋮ → Download data*,
+one CSV per program), copy them in the configuration folder and load them with
+the name of the program:
+
+```yaml
+action: appliance_cycle.import_file
+data:
+  entity_id: sensor.dishwasher_status
+  file: dishwasher/eco.csv
+  program: Eco
+```
+
 Then look at `known_programs` on the program sensor and rename them:
 
 ```yaml
@@ -111,6 +125,7 @@ data:
 | Service | Description |
 | --- | --- |
 | `import_history` | learns the cycles found in the recorder history (`days`, default 10); returns `{cycles: n}` |
+| `import_file` | learns the cycles of a CSV exported from the history (`file` relative to the configuration folder, optional `program` name); returns `{cycles: n}` |
 | `rename_program` | renames a learned program |
 | `delete_program` | forgets a program |
 | `set_last_program` | the last cycle was recognised wrongly: assign it to another (new or existing) program |

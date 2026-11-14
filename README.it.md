@@ -77,8 +77,10 @@ consumo. Cicli con lo stesso profilo formano un programma (`Programma 1`,
 
 **Tempo rimanente.** Durante il ciclo, il profilo fin qui viene allineato
 (dynamic time warping) con quelli appresi: il migliore indica il programma e
-il punto in cui si trova. Finché nessun programma è stato appreso il tempo
-rimanente non è disponibile.
+il punto in cui si trova. Finché il ciclo non somiglia a nessun programma
+appreso (un programma mai usato prima), tempo rimanente e programma restano
+*sconosciuti* invece di mostrare la stima di un altro programma; il nuovo
+programma viene imparato alla fine del ciclo.
 
 Provato su tracce reali di una lavastoviglie (9 programmi, leave-one-out): il
 programma viene riconosciuto da circa metà ciclo e a metà ciclo la fine
@@ -98,6 +100,18 @@ data:
   days: 10
 ```
 
+Se hai dei log esportati dallo storico (*Cronologia → ⋮ → Scarica dati*, un
+CSV per programma), copiali nella cartella di configurazione e caricali con il
+nome del programma:
+
+```yaml
+action: appliance_cycle.import_file
+data:
+  entity_id: sensor.lavastoviglie_stato
+  file: lavastoviglie/eco.csv
+  program: Eco
+```
+
 Poi guarda `known_programs` sul sensore programma e rinominali:
 
 ```yaml
@@ -113,6 +127,7 @@ data:
 | Servizio | Descrizione |
 | --- | --- |
 | `import_history` | impara i cicli presenti nello storico (`days`, predefinito 10); restituisce `{cycles: n}` |
+| `import_file` | impara i cicli di un CSV esportato dallo storico (`file` relativo alla cartella di configurazione, `program` facoltativo); restituisce `{cycles: n}` |
 | `rename_program` | rinomina un programma appreso |
 | `delete_program` | dimentica un programma |
 | `set_last_program` | l'ultimo ciclo è stato riconosciuto male: assegnalo a un altro programma (nuovo o esistente) |

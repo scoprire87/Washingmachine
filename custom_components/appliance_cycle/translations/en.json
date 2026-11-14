@@ -103,6 +103,15 @@
         },
         "no_cycle": {
             "message": "No cycle has been recorded yet."
+        },
+        "file_not_allowed": {
+            "message": "The file {file} is outside the configuration folder."
+        },
+        "file_not_readable": {
+            "message": "Cannot read {file}: {error}"
+        },
+        "file_not_csv": {
+            "message": "{file} is not a history CSV (columns state and last_changed are needed)."
         }
     },
     "services": {
@@ -117,6 +126,24 @@
                 "days": {
                     "name": "Days",
                     "description": "How many days of history to scan."
+                }
+            }
+        },
+        "import_file": {
+            "name": "Import from file",
+            "description": "Learn the cycles of a CSV exported from the history of Home Assistant (entity_id, state, last_changed).",
+            "fields": {
+                "entity_id": {
+                    "name": "Appliance",
+                    "description": "Any entity of the appliance (for example its status)."
+                },
+                "file": {
+                    "name": "File",
+                    "description": "Path of the CSV, relative to the configuration folder."
+                },
+                "program": {
+                    "name": "Program",
+                    "description": "Name of the program run in the file. If empty, the program is recognised or a new one is created."
                 }
             }
         },
