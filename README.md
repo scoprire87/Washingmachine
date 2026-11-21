@@ -43,6 +43,10 @@ Then open **Configure** on the entry. The menu offers:
 - **Notifications and detection** (below);
 - **Rename a program**, **Correct the program of the last cycle**,
   **Delete programs** (one or more at once);
+- **Program durations (display)**: one program per line with the duration the
+  appliance display shows, for example `Intenso 3:16`. When the running cycle
+  is recognised as one of them, the remaining time counts down from that
+  duration, like the display;
 - **Load the preset programs** (dishwasher): programs recorded from a real
   dishwasher, useful if you have the same model. Learned programs with an
   automatic name that match one of them take its name;
@@ -77,12 +81,28 @@ running; most smart plugs do.
 
 **Detection.** A cycle starts when the power goes above the *start power* and
 ends when it stays at or below the *idle power* for the *end delay*. Short
-activity that never reaches the start power (display, door auto-opening, a
-drying fan after the end) is ignored.
+activity that never reaches the start power (display, door auto-opening) is
+ignored.
+
+For dishwashers the default idle power is 1 W: after the last heating the
+program goes on for up to ~2 hours of drying (fan ~15 W, then readings
+alternating between 0 and 2 W) and ends when the display says so. With a
+higher threshold (e.g. 4 W) the drying is left out of the cycle.
 
 **Learning.** Every finished cycle is stored as a power profile. Cycles with
 the same profile are grouped into one program (`Program 1`, `Program 2`, ...).
 Give them meaningful names from **Configure**.
+
+When a cycle matches no known program, besides the "finished" notification you
+are asked **"which program was it?"**: mobile app notifications
+(`notify.mobile_app_...`) have a *Reply* button, just type the name (e.g.
+`intenso`; it is written like the display durations entry). The question also
+appears in the Home Assistant notifications and the
+`appliance_cycle_unknown_program` event is fired.
+
+If a cycle lasts longer than the stored runs (for example runs stored before the
+drying was included) but within 15% of the display duration of the program
+recognised while it ran, it gets that program.
 
 **Remaining time.** While a cycle runs, its profile so far is aligned (dynamic
 time warping) with the learned runs: the best match gives the program and how
@@ -142,10 +162,14 @@ data:
 | `rename_program` | renames a learned program |
 | `delete_program` | forgets a program |
 | `set_last_program` | the last cycle was recognised wrongly: assign it to another (new or existing) program |
+| `set_program_durations` | display durations per program (`programs`: `{"Intenso": "3:16"}` or text with one `Intenso 3:16` per line); returns `{programs: n}` |
+| `archive_runs` | archive the stored runs: they still help recognising programs but no longer count in the average durations once newer runs exist; returns `{runs: n}` |
 
 ## Events and automations
 
-`appliance_cycle_started` and `appliance_cycle_finished` are fired on the bus.
+`appliance_cycle_started`, `appliance_cycle_finished` and
+`appliance_cycle_unknown_program` (a cycle of a program never seen before:
+`program` is the automatic name, `duration` in seconds) are fired on the bus.
 The *finished* event carries `name`, `program`, `started`, `ended`,
 `duration` (s) and `energy` (Wh).
 

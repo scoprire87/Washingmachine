@@ -30,7 +30,8 @@
                     "set_last_program": "Correct the program of the last cycle",
                     "import_file": "Learn from a CSV log",
                     "load_presets": "Load the preset programs",
-                    "delete_program": "Delete programs"
+                    "delete_program": "Delete programs",
+                    "program_durations": "Program durations (display)"
                 }
             },
             "settings": {
@@ -97,13 +98,24 @@
             "load_presets": {
                 "title": "Load the preset programs",
                 "description": "Programs recorded from a real dishwasher:\n{presets}\n\nUseful if you have the same model; they are recognised like learned programs and can be deleted at any time. Learned programs with an automatic name (“Program 2”) that match one of them take its name."
+            },
+            "program_durations": {
+                "title": "Program durations",
+                "description": "Durations shown on the appliance display, one program per line (for example `Intenso 3:16`). When a running cycle is recognised as one of these programs, the remaining time counts down from this duration, like the display. Names are matched ignoring case.{error}",
+                "data": {
+                    "durations": "Programs"
+                },
+                "data_description": {
+                    "durations": "One line per program: name, then the duration as H:MM (or minutes). Leave empty to remove all."
+                }
             }
         },
         "error": {
             "empty_name": "The name cannot be empty.",
             "unknown_program": "Program not found.",
             "invalid_file": "The file is not a history CSV (columns state and last_changed are needed).",
-            "no_new_cycle": "No new cycle in the file (no complete cycle, or cycles already learned)."
+            "no_new_cycle": "No new cycle in the file (no complete cycle, or cycles already learned).",
+            "invalid_durations": "A line could not be read: use «name H:MM», for example «Intenso 3:16»."
         },
         "abort": {
             "not_loaded": "The appliance is not loaded.",
@@ -114,7 +126,8 @@
             "file_imported": "Learned {cycles} cycle(s). Known programs:\n{programs}",
             "program_deleted": "Deleted: {program}. Known programs:\n{programs}",
             "presets_loaded": "Added {added} runs; {renamed} learned runs took the name of a preset program. Known programs:\n{programs}",
-            "presets_already_loaded": "The preset programs are already loaded."
+            "presets_already_loaded": "The preset programs are already loaded.",
+            "durations_saved": "Saved the durations of {count} programs."
         }
     },
     "selector": {
@@ -177,6 +190,9 @@
         },
         "file_not_csv": {
             "message": "{file} is not a history CSV (columns state and last_changed are needed)."
+        },
+        "invalid_durations": {
+            "message": "Invalid program durations: {error}"
         }
     },
     "services": {
@@ -255,6 +271,30 @@
                 "program": {
                     "name": "Program",
                     "description": "Program name, as shown by the Program sensor."
+                }
+            }
+        },
+        "set_program_durations": {
+            "name": "Set program durations",
+            "description": "Store the duration shown on the appliance display for each program: recognised cycles then count down from it.",
+            "fields": {
+                "entity_id": {
+                    "name": "Appliance",
+                    "description": "Any entity of the appliance (for example its status)."
+                },
+                "programs": {
+                    "name": "Programs",
+                    "description": "Program name → duration (\"H:MM\" or minutes), or text with one \"name H:MM\" per line."
+                }
+            }
+        },
+        "archive_runs": {
+            "name": "Archive runs",
+            "description": "Archive all stored runs: they still help recognising programs, but no longer count in the average durations once newer runs exist.",
+            "fields": {
+                "entity_id": {
+                    "name": "Appliance",
+                    "description": "Any entity of the appliance (for example its status)."
                 }
             }
         }

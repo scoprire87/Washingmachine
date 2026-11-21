@@ -75,3 +75,24 @@ set_last_program:
       example: "Eco"
       selector:
         text:
+
+set_program_durations:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: appliance_cycle
+    programs:
+      required: true
+      example: '{"Intenso": "3:16", "Eco": "4:39"}'
+      selector:
+        object:
+
+archive_runs:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: appliance_cycle

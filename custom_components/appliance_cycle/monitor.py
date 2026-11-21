@@ -44,8 +44,10 @@ from .const import (
     DOMAIN,
     EVENT_FINISHED,
     EVENT_STARTED,
+    EVENT_UNKNOWN_PROGRAM,
     MAX_RUNS,
     MAX_RUNS_PER_PROGRAM,
+    NAME_PROGRAM_ACTION,
     RESUME_HOURS,
     STATUS_FINISHED,
     STATUS_IDLE,
@@ -63,6 +65,7 @@ from .engine import (
     energy_wh,
     estimate,
     load_presets,
+    program_key,
     read_history_csv,
     resample,
 )
@@ -72,6 +75,10 @@ _LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 1
 
+# A finished cycle takes the program recognised while it ran when its
+# duration is within this fraction of the duration shown on the display.
+DISPLAY_TOLERANCE = 0.15
+
 MESSAGES = {
     "en": {
         "finished_title": "{name}: finished",
@@ -80,6 +87,10 @@ MESSAGES = {
         "soon": "{program} will finish in about {minutes} min (at {time}).",
         "program": "The cycle",
         "new_program": "Program {n}",
+        "unknown_title": "{name}: which program was it?",
+        "unknown": "A {duration} cycle did not match any known program and was saved as \u201c{program}\u201d. Reply with the program name{examples}.",
+        "unknown_panel": "Reply from the phone notification, or rename \u201c{program}\u201d from the integration options (Rename a program).",
+        "reply": "Reply",
     },
     "it": {
         "finished_title": "{name}: finito",
@@ -88,6 +99,10 @@ MESSAGES = {
         "soon": "{program} termina tra circa {minutes} min (alle {time}).",
         "program": "Il lavaggio",
         "new_program": "Programma {n}",
+        "unknown_title": "{name}: che programma era?",
+        "unknown": "Un ciclo di {duration} non corrisponde a nessun programma conosciuto ed \u00e8 stato salvato come \u00ab{program}\u00bb. Rispondi con il nome del programma{examples}.",
+        "unknown_panel": "Rispondi dalla notifica sul telefono, oppure rinomina \u00ab{program}\u00bb dalle opzioni dell'integrazione (Rinomina un programma).",
+        "reply": "Rispondi",
     },
 }
 
@@ -156,6 +171,8 @@ class ApplianceMonitor:
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}"
         )
         self.profiles: list[Profile] = []
+        # program name -> duration (s) shown on the appliance display
+        self.durations: dict[str, float] = {}
 
         # --- published state ---
         self.status = STATUS_IDLE
@@ -183,6 +200,10 @@ class ApplianceMonitor:
     async def async_start(self) -> None:
         stored = await self._store.async_load() or {}
         self.profiles = [Profile.from_dict(p) for p in stored.get("profiles", [])]
+        self.durations = {
+            str(name): float(seconds)
+            for name, seconds in (stored.get("durations") or {}).items()
+        }
         self.last_cycle = stored.get("last_cycle")
         if self.last_cycle:
             self.energy = self.last_cycle.get("energy")
@@ -200,6 +221,11 @@ class ApplianceMonitor:
         self._unsubs.append(
             async_track_state_change_event(
                 self.hass, [self.power_sensor], self._async_power_changed
+            )
+        )
+        self._unsubs.append(
+            self.hass.bus.async_listen(
+                "mobile_app_notification_action", self._async_notification_action
             )
         )
         if self.detector.cycle is None and (
@@ -381,8 +407,12 @@ class ApplianceMonitor:
             self.remaining = self.end_time = self.progress = self.program = None
             self.confidence = 0.0
             return
-        # the estimate refers to the last complete bin
-        remaining = max(0.0, remaining - (elapsed - self._bins_done * BIN_SECONDS))
+        if (display := self.display_duration(program)) is not None:
+            # the program is recognised: count down like the appliance display
+            remaining = max(0.0, display - elapsed)
+        else:
+            # the estimate refers to the last complete bin
+            remaining = max(0.0, remaining - (elapsed - self._bins_done * BIN_SECONDS))
         self.remaining = remaining
         self.program = program
         self.confidence = confidence
@@ -402,7 +432,10 @@ class ApplianceMonitor:
     @callback
     def _on_finished(self, cycle: Cycle) -> None:
         profile = cycle.profile()
-        program = self._learn(profile)
+        recognised = self.program if self.status == STATUS_RUNNING else None
+        known = {p.program for p in self.profiles}
+        program = self._learn(profile, hint=recognised)
+        is_new = program not in known and bool(_AUTO_NAME.match(program))
         self.status = STATUS_FINISHED
         self.program = program
         self.confidence = 1.0
@@ -427,18 +460,34 @@ class ApplianceMonitor:
                 {"entry_id": self.entry.entry_id, "name": self.name, **self.last_cycle},
             )
             self._send_finished_notification()
+            if is_new:
+                self._ask_program(program, profile.duration)
         self._schedule_finished_timeout(cycle.end or cycle.start)
 
     # ------------------------------------------------------------ learning
 
     @callback
-    def _learn(self, profile: Profile, program: str | None = None) -> str:
-        """Store a finished run and return its program name."""
+    def _learn(
+        self, profile: Profile, program: str | None = None, hint: str | None = None
+    ) -> str:
+        """Store a finished run and return its program name.
+
+        ``hint`` is the program recognised while the cycle was running: it is
+        used when no stored run is close enough (e.g. only archived runs with
+        a cut drying phase) but the duration matches the program's display.
+        """
         for known in self.profiles:
             if abs(known.started - profile.started) < 120:
                 return known.program or self._new_program_name()  # already learned
         if program is None:
             program = classify(profile, self.profiles)
+        if (
+            program is None
+            and hint
+            and (display := self.display_duration(hint))
+            and abs(profile.duration - display) <= DISPLAY_TOLERANCE * display
+        ):
+            program = hint
         if program is None:
             program = self._new_program_name()
         profile.program = program
@@ -470,19 +519,64 @@ class ApplianceMonitor:
 
     @property
     def programs(self) -> dict[str, dict[str, Any]]:
-        """Known programs with number of runs and average duration/energy."""
-        result: dict[str, dict[str, Any]] = {}
+        """Known programs with number of runs and average duration/energy.
+
+        Archived runs are counted but left out of the averages when the
+        program has newer runs. ``display`` is the duration (min) shown on the
+        appliance, when known.
+        """
+        grouped: dict[str, list[Profile]] = {}
         for profile in self.profiles:
-            info = result.setdefault(
-                profile.program or "?", {"runs": 0, "duration": 0.0, "energy": 0.0}
-            )
-            info["runs"] += 1
-            info["duration"] += profile.duration
-            info["energy"] += profile.energy
-        for info in result.values():
-            info["duration"] = round(info["duration"] / info["runs"] / 60)
-            info["energy"] = round(info["energy"] / info["runs"] / 1000, 2)
+            grouped.setdefault(profile.program or "?", []).append(profile)
+        result: dict[str, dict[str, Any]] = {}
+        for name, runs in grouped.items():
+            fresh = [p for p in runs if not p.archived] or runs
+            info: dict[str, Any] = {
+                "runs": len(runs),
+                "duration": round(sum(p.duration for p in fresh) / len(fresh) / 60),
+                "energy": round(sum(p.energy for p in fresh) / len(fresh) / 1000, 2),
+            }
+            if (display := self.display_duration(name)) is not None:
+                info["display"] = round(display / 60)
+            result[name] = info
         return result
+
+    def display_duration(self, program: str | None) -> float | None:
+        """Duration (s) shown on the appliance display for a program."""
+        if not program:
+            return None
+        key = program_key(program)
+        return next(
+            (s for name, s in self.durations.items() if program_key(name) == key), None
+        )
+
+    def _canonical_name(self, name: str) -> str:
+        """A typed name written like the known program or display entry."""
+        key = program_key(name)
+        for known in [*self.durations, *(p.program for p in self.profiles if p.program)]:
+            if program_key(known) == key:
+                return known
+        return name.strip()
+
+    async def async_set_durations(self, durations: dict[str, float]) -> None:
+        """Replace the durations shown on the appliance display."""
+        self.durations = {name.strip(): float(s) for name, s in durations.items()}
+        await self._async_save()
+        if self.status == STATUS_RUNNING and self._live:
+            self._update_estimate(dt_util.utcnow().timestamp())
+        self._notify_listeners()
+
+    async def async_archive_runs(self) -> int:
+        """Archive every stored run (kept for recognition only)."""
+        count = 0
+        for profile in self.profiles:
+            if not profile.archived:
+                profile.archived = True
+                count += 1
+        if count:
+            await self._async_save()
+            self._notify_listeners()
+        return count
 
     async def async_load_presets(self) -> tuple[int, int]:
         """Add the bundled programs of this appliance type.
@@ -519,6 +613,7 @@ class ApplianceMonitor:
         return added, renamed
 
     async def async_rename_program(self, program: str, new_name: str) -> bool:
+        new_name = self._canonical_name(new_name)
         found = False
         for profile in self.profiles:
             if profile.program == program:
@@ -529,7 +624,9 @@ class ApplianceMonitor:
                 self.program = new_name
             if self.last_cycle and self.last_cycle.get("program") == program:
                 self.last_cycle["program"] = new_name
+            self._matcher_needs_rebuild()
             await self._async_save()
+            self._dismiss_question(program)
             self._notify_listeners()
         return found
 
@@ -561,6 +658,7 @@ class ApplianceMonitor:
             {
                 "profiles": [p.as_dict() for p in self.profiles],
                 "last_cycle": self.last_cycle,
+                "durations": self.durations,
             }
         )
 
@@ -661,6 +759,87 @@ class ApplianceMonitor:
                 energy=f"{self.last_cycle['energy'] / 1000:.2f}",
             ),
         )
+
+    def _question_id(self, program: str) -> str:
+        slug = "".join(c if c.isalnum() else "_" for c in program_key(program))
+        return f"{DOMAIN}_{self.entry.entry_id}_unknown_{slug}"
+
+    @callback
+    def _ask_program(self, program: str, duration: float) -> None:
+        """A new program was seen: ask which one it was."""
+        text = _messages(self.hass)
+        names = list(self.durations)[:3]
+        examples = f" ({', '.join(names)}...)" if names else ""
+        title = text["unknown_title"].format(name=self.name)
+        message = text["unknown"].format(
+            duration=_format_duration(duration), program=program, examples=examples
+        )
+        action = f"{NAME_PROGRAM_ACTION}|{self.entry.entry_id}|{program}"
+        for service in self.notify_services:
+            domain, _, name = service.partition(".")
+            if not name:
+                domain, name = "notify", domain
+            data: dict[str, Any] = {"title": title, "message": message}
+            if domain == "notify" and name.startswith("mobile_app"):
+                data["data"] = {
+                    "tag": self._question_id(program),
+                    "actions": [
+                        {
+                            "action": action,
+                            "title": text["reply"],
+                            "behavior": "textInput",
+                            "textInputButtonTitle": text["reply"],
+                            "textInputPlaceholder": ", ".join(names),
+                        }
+                    ],
+                }
+            elif domain == "persistent_notification":
+                continue  # created below, with its own id
+            self.hass.async_create_task(self._async_call_notify(domain, name, data))
+        if self.hass.services.has_service("persistent_notification", "create"):
+            self.hass.async_create_task(
+                self._async_call_notify(
+                    "persistent_notification",
+                    "create",
+                    {
+                        "title": title,
+                        "message": f"{message}\n\n{text['unknown_panel'].format(program=program)}",
+                        "notification_id": self._question_id(program),
+                    },
+                )
+            )
+        self.hass.bus.async_fire(
+            EVENT_UNKNOWN_PROGRAM,
+            {
+                "entry_id": self.entry.entry_id,
+                "name": self.name,
+                "program": program,
+                "duration": round(duration),
+                "action": action,
+            },
+        )
+
+    @callback
+    def _dismiss_question(self, program: str) -> None:
+        if self._live and self.hass.services.has_service("persistent_notification", "dismiss"):
+            self.hass.async_create_task(
+                self._async_call_notify(
+                    "persistent_notification",
+                    "dismiss",
+                    {"notification_id": self._question_id(program)},
+                )
+            )
+
+    @callback
+    def _async_notification_action(self, event: Event) -> None:
+        """Reply to "which program was it?" from the mobile app."""
+        prefix, _, rest = str(event.data.get("action") or "").partition("|")
+        entry_id, _, program = rest.partition("|")
+        if prefix != NAME_PROGRAM_ACTION or entry_id != self.entry.entry_id or not program:
+            return
+        reply = str(event.data.get("reply_text") or "").strip()
+        if reply:
+            self.hass.async_create_task(self.async_rename_program(program, reply))
 
     @callback
     def _send_soon_notification(self) -> None:

@@ -26,11 +26,15 @@ APPLIANCES = [
 ]
 
 # Detection defaults per appliance (idle W, start W, end delay minutes).
-# Dishwasher values come from real logs: standby 0-2 W, display 15 W, drying
-# 8-9 W, circulation pump 40-60 W, heater ~2 kW, pauses inside a cycle < 30 s.
+# Dishwasher values come from real logs: off 0 W, display 15 W, circulation
+# pump 40-60 W, heater ~2 kW. After the last heating the program goes on for
+# up to ~2 h (drying: fan ~15-18 W, then readings alternating 0 and 2 W every
+# few seconds) and ends when the display does: the idle power stays below the
+# 2 W readings so the drying belongs to the cycle (runs of 0 W inside it last
+# at most ~3 min).
 # Washing machines can pause for minutes while soaking, hence the longer delay.
 APPLIANCE_DEFAULTS: dict[str, dict[str, float]] = {
-    APPLIANCE_DISHWASHER: {CONF_IDLE_POWER: 4, CONF_START_POWER: 150, CONF_END_DELAY: 3},
+    APPLIANCE_DISHWASHER: {CONF_IDLE_POWER: 1, CONF_START_POWER: 150, CONF_END_DELAY: 5},
     APPLIANCE_WASHING_MACHINE: {CONF_IDLE_POWER: 4, CONF_START_POWER: 100, CONF_END_DELAY: 10},
     APPLIANCE_DRYER: {CONF_IDLE_POWER: 5, CONF_START_POWER: 200, CONF_END_DELAY: 5},
     APPLIANCE_OTHER: {CONF_IDLE_POWER: 4, CONF_START_POWER: 100, CONF_END_DELAY: 5},
@@ -60,8 +64,16 @@ SERVICE_RENAME_PROGRAM = "rename_program"
 SERVICE_DELETE_PROGRAM = "delete_program"
 SERVICE_SET_LAST_PROGRAM = "set_last_program"
 SERVICE_IMPORT_FILE = "import_file"
+SERVICE_SET_PROGRAM_DURATIONS = "set_program_durations"
+SERVICE_ARCHIVE_RUNS = "archive_runs"
+
+EVENT_UNKNOWN_PROGRAM = f"{DOMAIN}_unknown_program"
+# Mobile app notification action asking which program a new cycle was:
+# "<prefix>|<entry_id>|<automatic program name>"
+NAME_PROGRAM_ACTION = "APPLIANCE_CYCLE_NAME_PROGRAM"
 
 ATTR_DAYS = "days"
 ATTR_PROGRAM = "program"
 ATTR_NEW_NAME = "new_name"
 ATTR_FILE = "file"
+ATTR_PROGRAMS = "programs"
