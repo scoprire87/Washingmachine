@@ -33,7 +33,7 @@ from .const import (
     DOMAIN,
     SECTION_DETECTION,
 )
-from .engine import has_presets, load_presets
+from .engine import format_duration, has_presets, load_presets, parse_durations_text
 
 if TYPE_CHECKING:
     from .monitor import ApplianceMonitor
@@ -43,6 +43,8 @@ STEP_LAST = "set_last_program"
 STEP_IMPORT = "import_file"
 STEP_DELETE = "delete_program"
 STEP_PRESETS = "load_presets"
+STEP_DURATIONS = "program_durations"
+FIELD_DURATIONS = "durations"
 FIELD_PROGRAM = "program"
 FIELD_NEW_NAME = "new_name"
 FIELD_FILE = "file"
@@ -157,10 +159,10 @@ class ApplianceCycleOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        menu = ["settings", STEP_RENAME, STEP_LAST, STEP_IMPORT, STEP_DELETE]
+        menu = ["settings", STEP_RENAME, STEP_LAST, STEP_DURATIONS, STEP_IMPORT, STEP_DELETE]
         appliance = self.config_entry.data.get(CONF_APPLIANCE, APPLIANCES[0])
         if await self.hass.async_add_executor_job(has_presets, appliance):
-            menu.insert(4, STEP_PRESETS)
+            menu.insert(5, STEP_PRESETS)
         return self.async_show_menu(step_id="init", menu_options=menu)
 
     # ------------------------------------------------------------ settings
@@ -273,6 +275,44 @@ class ApplianceCycleOptionsFlow(OptionsFlow):
                 "started": str(last.get("started", ""))[:16].replace("T", " "),
                 "duration": str(round((last.get("duration") or 0) / 60)),
             },
+        )
+
+    async def async_step_program_durations(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if (monitor := self._monitor()) is None:
+            return self.async_abort(reason="not_loaded")
+        errors: dict[str, str] = {}
+        placeholders = {"error": ""}
+        if user_input is not None:
+            try:
+                durations = parse_durations_text(user_input.get(FIELD_DURATIONS) or "")
+            except ValueError as err:
+                errors[FIELD_DURATIONS] = "invalid_durations"
+                placeholders["error"] = str(err)
+            else:
+                await monitor.async_set_durations(durations)
+                return self.async_abort(
+                    reason="durations_saved",
+                    description_placeholders={"count": str(len(durations))},
+                )
+        current = "\n".join(
+            f"{name} {format_duration(seconds)}" for name, seconds in monitor.durations.items()
+        )
+        schema = vol.Schema(
+            {
+                vol.Optional(FIELD_DURATIONS): selector.TextSelector(
+                    selector.TextSelectorConfig(multiline=True)
+                ),
+            }
+        )
+        return self.async_show_form(
+            step_id=STEP_DURATIONS,
+            data_schema=self.add_suggested_values_to_schema(
+                schema, user_input or {FIELD_DURATIONS: current}
+            ),
+            errors=errors,
+            description_placeholders=placeholders,
         )
 
     async def async_step_import_file(

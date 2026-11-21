@@ -30,7 +30,8 @@
                     "set_last_program": "Correggi il programma dell'ultimo ciclo",
                     "import_file": "Impara da un log CSV",
                     "load_presets": "Carica i programmi preimpostati",
-                    "delete_program": "Elimina programmi"
+                    "delete_program": "Elimina programmi",
+                    "program_durations": "Durate dei programmi (display)"
                 }
             },
             "settings": {
@@ -97,13 +98,24 @@
             "load_presets": {
                 "title": "Carica i programmi preimpostati",
                 "description": "Programmi registrati da una lavastoviglie reale:\n{presets}\n\nUtili se hai lo stesso modello: vengono riconosciuti come quelli imparati e puoi eliminarli quando vuoi. I programmi imparati con un nome automatico («Programma 2») che corrispondono a uno di questi ne prendono il nome."
+            },
+            "program_durations": {
+                "title": "Durate dei programmi",
+                "description": "Durate indicate sul display dell'elettrodomestico, un programma per riga (ad esempio `Intenso 3:16`). Quando il ciclo in corso è riconosciuto come uno di questi programmi, il tempo rimanente è un conto alla rovescia da questa durata, come sul display. Maiuscole e minuscole non contano.{error}",
+                "data": {
+                    "durations": "Programmi"
+                },
+                "data_description": {
+                    "durations": "Una riga per programma: nome e durata in H:MM (o minuti). Lascia vuoto per eliminarle tutte."
+                }
             }
         },
         "error": {
             "empty_name": "Il nome non può essere vuoto.",
             "unknown_program": "Programma non trovato.",
             "invalid_file": "Il file non è un CSV della cronologia (servono le colonne state e last_changed).",
-            "no_new_cycle": "Nessun ciclo nuovo nel file (nessun ciclo completo, o cicli già imparati)."
+            "no_new_cycle": "Nessun ciclo nuovo nel file (nessun ciclo completo, o cicli già imparati).",
+            "invalid_durations": "Una riga non è leggibile: usa «nome H:MM», ad esempio «Intenso 3:16»."
         },
         "abort": {
             "not_loaded": "L'elettrodomestico non è caricato.",
@@ -114,7 +126,8 @@
             "file_imported": "Imparati {cycles} cicli. Programmi conosciuti:\n{programs}",
             "program_deleted": "Eliminati: {program}. Programmi conosciuti:\n{programs}",
             "presets_loaded": "Aggiunti {added} lavaggi; {renamed} lavaggi imparati hanno preso il nome di un programma preimpostato. Programmi conosciuti:\n{programs}",
-            "presets_already_loaded": "I programmi preimpostati sono già caricati."
+            "presets_already_loaded": "I programmi preimpostati sono già caricati.",
+            "durations_saved": "Salvate le durate di {count} programmi."
         }
     },
     "selector": {
@@ -177,6 +190,9 @@
         },
         "file_not_csv": {
             "message": "{file} non è un CSV dello storico (servono le colonne state e last_changed)."
+        },
+        "invalid_durations": {
+            "message": "Durate dei programmi non valide: {error}"
         }
     },
     "services": {
@@ -255,6 +271,30 @@
                 "program": {
                     "name": "Programma",
                     "description": "Nome del programma, come appare nel sensore Programma."
+                }
+            }
+        },
+        "set_program_durations": {
+            "name": "Imposta le durate dei programmi",
+            "description": "Salva la durata indicata sul display per ogni programma: i cicli riconosciuti fanno il conto alla rovescia da questa durata.",
+            "fields": {
+                "entity_id": {
+                    "name": "Elettrodomestico",
+                    "description": "Una qualsiasi entità dell'elettrodomestico (ad esempio il suo stato)."
+                },
+                "programs": {
+                    "name": "Programmi",
+                    "description": "Nome programma → durata (\"H:MM\" o minuti), oppure testo con una riga \"nome H:MM\" per programma."
+                }
+            }
+        },
+        "archive_runs": {
+            "name": "Archivia i lavaggi",
+            "description": "Archivia tutti i lavaggi salvati: servono ancora a riconoscere i programmi, ma non contano più nelle durate medie quando ci sono lavaggi più recenti.",
+            "fields": {
+                "entity_id": {
+                    "name": "Elettrodomestico",
+                    "description": "Una qualsiasi entità dell'elettrodomestico (ad esempio il suo stato)."
                 }
             }
         }

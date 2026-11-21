@@ -89,13 +89,17 @@ class Profile:
     energy: float = 0.0  # Wh
     started: float = 0.0  # timestamp
     bin_seconds: float = BIN_SECONDS
+    # Archived runs still help recognising the program, but their duration and
+    # energy are left out of the statistics once newer runs exist (e.g. runs
+    # recorded with detection settings that cut the drying phase).
+    archived: bool = False
 
     @property
     def features(self) -> list[float]:
         return [feature(p) for p in self.power]
 
     def as_dict(self) -> dict:
-        return {
+        data = {
             "duration": round(self.duration, 1),
             "power": [round(p, 1) for p in self.power],
             "program": self.program,
@@ -103,6 +107,9 @@ class Profile:
             "started": self.started,
             "bin_seconds": self.bin_seconds,
         }
+        if self.archived:
+            data["archived"] = True
+        return data
 
     @classmethod
     def from_dict(cls, data: dict) -> Profile:
@@ -113,6 +120,7 @@ class Profile:
             energy=float(data.get("energy", 0.0)),
             started=float(data.get("started", 0.0)),
             bin_seconds=float(data.get("bin_seconds", BIN_SECONDS)),
+            archived=bool(data.get("archived", False)),
         )
 
 
@@ -501,3 +509,58 @@ def classify(profile: Profile, library: Sequence[Profile]) -> str | None:
         if match is not None and (best is None or match.score < best[0]):
             best = (match.score, reference.program)
     return best[1] if best else None
+
+
+# ---------------------------------------------------------------------------
+# Program durations shown on the appliance display
+# ---------------------------------------------------------------------------
+
+
+def program_key(name: str) -> str:
+    """Program names compared ignoring case and repeated spaces."""
+    return " ".join(name.casefold().split())
+
+
+def parse_duration(value: object) -> float:
+    """Seconds from "H:MM" (as on the display), minutes or "<n> min"."""
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        minutes = float(value)
+    else:
+        text = str(value).strip().casefold().removesuffix("min").strip()
+        if ":" in text:
+            hours, _, mins = text.partition(":")
+            if not hours.strip().isdigit() or not mins.strip().isdigit() or int(mins) >= 60:
+                raise ValueError(f"invalid duration: {value!r}")
+            minutes = int(hours) * 60 + int(mins)
+        else:
+            minutes = float(text)
+    if not 0 < minutes <= 24 * 60:
+        raise ValueError(f"invalid duration: {value!r}")
+    return minutes * 60.0
+
+
+def format_duration(seconds: float) -> str:
+    """Seconds as "H:MM"."""
+    hours, minutes = divmod(round(seconds / 60), 60)
+    return f"{hours}:{minutes:02d}"
+
+
+def parse_durations_text(text: str) -> dict[str, float]:
+    """Program durations, one per line: "Intenso 3:16" or "Intenso = 3:16"."""
+    durations: dict[str, float] = {}
+    for number, raw in enumerate(text.splitlines(), start=1):
+        line = raw.strip().lstrip("-*").strip()
+        if not line:
+            continue
+        if "=" in line:
+            name, _, value = line.rpartition("=")
+        else:
+            name, _, value = line.rpartition(" ")
+        name = name.strip().rstrip(":").strip()
+        if not name:
+            raise ValueError(f"line {number}: {raw!r}")
+        try:
+            durations[name] = parse_duration(value)
+        except ValueError as err:
+            raise ValueError(f"line {number}: {raw!r}") from err
+    return durations

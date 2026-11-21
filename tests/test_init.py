@@ -142,9 +142,11 @@ async def test_learns_and_recognises_programs(hass, freezer):
     assert finished[0].data["program"] == "Program 1"
     assert finished[0].data["duration"] / 60 == pytest.approx(150.6, abs=0.5)
     assert float(hass.states.get(ENERGY).state) == pytest.approx(0.87, abs=0.02)
-    assert len(notify) == 1
+    assert len(notify) == 2
     assert notify[0].data["title"] == "Dishwasher: finished"
     assert "Program 1 finished after 2 h 31 min" in notify[0].data["message"]
+    # a program never seen before: the user is asked which one it was
+    assert notify[1].data["title"] == "Dishwasher: which program was it?"
 
     # the user names the program
     await hass.services.async_call(
@@ -182,7 +184,7 @@ async def test_learns_and_recognises_programs(hass, freezer):
     await _advance(hass, freezer, 240)
     assert hass.states.get(STATUS).state == "finished"
     assert hass.states.get(PROGRAM).state == "Eco"
-    assert len(notify) == 2 and "Eco finished" in notify[1].data["message"]
+    assert len(notify) == 3 and "Eco finished" in notify[2].data["message"]
     known = hass.states.get(PROGRAM).attributes["known_programs"]
     assert known["Eco"]["runs"] == 2
 
@@ -201,20 +203,21 @@ async def test_reminder_before_the_end(hass, freezer):
     first, second = _eco_runs()
     await _replay(hass, freezer, first)
     await _advance(hass, freezer, 240)
-    assert len(notify) == 1  # no reminder without a known program
+    # no reminder without a known program (finished + "which program?")
+    assert len(notify) == 2
 
     sent_at = []
 
     def check(seconds):
-        if len(notify) == 2 and not sent_at:
+        if len(notify) == 3 and not sent_at:
             sent_at.append((seconds - 120) / 60)
 
     await _replay(hass, freezer, second, check=check)
-    assert notify[1].data["title"] == "Dishwasher: almost done"
+    assert notify[2].data["title"] == "Dishwasher: almost done"
     # about 10 minutes before the real end (152.4 min)
     assert 152.4 - sent_at[0] == pytest.approx(10, abs=4)
     await _advance(hass, freezer, 240)
-    assert len(notify) == 3 and notify[2].data["title"] == "Dishwasher: finished"
+    assert len(notify) == 4 and notify[3].data["title"] == "Dishwasher: finished"
 
 
 async def test_display_and_door_are_not_cycles(hass, freezer):

@@ -43,6 +43,10 @@ Poi apri **Configura**. Il menu offre:
 - **Notifiche e rilevamento** (sotto);
 - **Rinomina un programma**, **Correggi il programma dell'ultimo ciclo**,
   **Elimina programmi** (uno o più insieme);
+- **Durate dei programmi (display)**: un programma per riga con la durata
+  indicata dal display, ad esempio `Intenso 3:16`. Quando il ciclo è
+  riconosciuto come uno di questi programmi, il tempo rimanente è un conto alla
+  rovescia da quella durata, come sul display;
 - **Carica i programmi preimpostati** (lavastoviglie): programmi registrati da
   una lavastoviglie reale, utili se hai lo stesso modello. I programmi imparati
   con un nome automatico che corrispondono a uno di questi ne prendono il nome;
@@ -80,11 +84,27 @@ l'elettrodomestico lavora; la maggior parte delle prese smart lo fa.
 **Rilevamento.** Il ciclo inizia quando la potenza supera la *potenza di
 avvio* e finisce quando resta sotto la *potenza a riposo* per il *ritardo di
 fine*. Le attività brevi che non raggiungono la potenza di avvio (display,
-apertura automatica della porta, ventola dopo la fine) vengono ignorate.
+apertura automatica della porta) vengono ignorate.
+
+Per la lavastoviglie la potenza a riposo predefinita è 1 W: dopo l'ultimo
+riscaldamento il programma continua fino a ~2 ore con l'asciugatura (ventola
+~15 W, poi letture che alternano 0 e 2 W) e finisce quando lo indica il
+display. Con soglie più alte (es. 4 W) l'asciugatura resta fuori dal ciclo.
 
 **Apprendimento.** Ogni ciclo terminato viene salvato come profilo di
 consumo. Cicli con lo stesso profilo formano un programma (`Programma 1`,
 `Programma 2`, ...), che puoi rinominare da **Configura**.
+
+Quando un ciclo non corrisponde a nessun programma conosciuto, oltre alla
+notifica di fine arriva la domanda **«che programma era?»**: sulle notifiche
+dell'app (`notify.mobile_app_...`) c'è il pulsante *Rispondi*, basta scrivere
+il nome (es. `intenso`, viene scritto come nelle durate del display). La
+domanda compare anche nelle notifiche di Home Assistant e viene emesso
+l'evento `appliance_cycle_unknown_program`.
+
+Se il ciclo dura più dei lavaggi salvati (ad esempio lavaggi salvati prima di
+includere l'asciugatura) ma la durata è entro il 15% di quella del display del
+programma riconosciuto durante il ciclo, gli viene assegnato quel programma.
 
 **Tempo rimanente.** Durante il ciclo, il profilo fin qui viene allineato
 (dynamic time warping) con quelli appresi: il migliore indica il programma e
@@ -144,10 +164,14 @@ data:
 | `rename_program` | rinomina un programma appreso |
 | `delete_program` | dimentica un programma |
 | `set_last_program` | l'ultimo ciclo è stato riconosciuto male: assegnalo a un altro programma (nuovo o esistente) |
+| `set_program_durations` | durate del display per programma (`programs`: `{"Intenso": "3:16"}` o testo `Intenso 3:16` una riga per programma); restituisce `{programs: n}` |
+| `archive_runs` | archivia i lavaggi salvati: servono ancora a riconoscere i programmi ma non contano più nelle durate medie quando ci sono lavaggi nuovi; restituisce `{runs: n}` |
 
 ## Eventi e automazioni
 
-Sul bus vengono emessi `appliance_cycle_started` e `appliance_cycle_finished`.
+Sul bus vengono emessi `appliance_cycle_started`, `appliance_cycle_finished`
+e `appliance_cycle_unknown_program` (ciclo di un programma mai visto: `program`
+è il nome automatico, `duration` in secondi).
 L'evento di fine contiene `name`, `program`, `started`, `ended`, `duration`
 (s) ed `energy` (Wh).
 

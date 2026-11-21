@@ -22,14 +22,18 @@ from .const import (
     ATTR_FILE,
     ATTR_NEW_NAME,
     ATTR_PROGRAM,
+    ATTR_PROGRAMS,
     DEFAULT_IMPORT_DAYS,
     DOMAIN,
+    SERVICE_ARCHIVE_RUNS,
     SERVICE_DELETE_PROGRAM,
     SERVICE_IMPORT_FILE,
     SERVICE_IMPORT_HISTORY,
     SERVICE_RENAME_PROGRAM,
     SERVICE_SET_LAST_PROGRAM,
+    SERVICE_SET_PROGRAM_DURATIONS,
 )
+from .engine import parse_duration, parse_durations_text
 from .monitor import ApplianceMonitor
 
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
@@ -112,6 +116,42 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 translation_domain=DOMAIN, translation_key="no_cycle"
             )
 
+    async def set_program_durations(call: ServiceCall) -> ServiceResponse:
+        raw = call.data[ATTR_PROGRAMS]
+        try:
+            if isinstance(raw, dict):
+                durations = {str(k).strip(): parse_duration(v) for k, v in raw.items()}
+            else:
+                durations = parse_durations_text(str(raw))
+        except ValueError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_durations",
+                translation_placeholders={"error": str(err)},
+            ) from err
+        monitor = _monitor(call)
+        await monitor.async_set_durations(durations)
+        return {"programs": len(durations)}
+
+    async def archive_runs(call: ServiceCall) -> ServiceResponse:
+        return {"runs": await _monitor(call).async_archive_runs()}
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_PROGRAM_DURATIONS,
+        set_program_durations,
+        schema=vol.Schema(
+            {**_TARGET, vol.Required(ATTR_PROGRAMS): vol.Any(dict, cv.string)}
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_ARCHIVE_RUNS,
+        archive_runs,
+        schema=vol.Schema(_TARGET),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
     hass.services.async_register(
         DOMAIN,
         SERVICE_IMPORT_HISTORY,
