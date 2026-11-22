@@ -49,6 +49,7 @@ from .const import (
     MAX_RUNS_PER_PROGRAM,
     NAME_PROGRAM_ACTION,
     RESUME_HOURS,
+    RESUME_MARGIN,
     STATUS_ACTIVE,
     STATUS_FINISHED,
     STATUS_IDLE,
@@ -188,6 +189,7 @@ class ApplianceMonitor:
         self.energy: float | None = None  # Wh of the current (or last) cycle
         self.power: float | None = None  # W, last reading of the power sensor
         self._started_before_active: datetime | None = None
+        self._replay_start: float | None = None
         self.last_cycle: dict[str, Any] | None = None
 
         self._matcher: ProgramMatcher | None = None
@@ -215,7 +217,9 @@ class ApplianceMonitor:
 
         # resume a cycle that was running while Home Assistant restarted
         now = dt_util.utcnow()
-        readings = await self.async_history(now - timedelta(hours=RESUME_HOURS), now)
+        since = now - timedelta(seconds=self.resume_window)
+        self._replay_start = since.timestamp()
+        readings = await self.async_history(since, now)
         for timestamp, power in readings:
             self._feed(timestamp, power)
         self._handle_events(self.detector.tick(now.timestamp()))
@@ -455,8 +459,36 @@ class ApplianceMonitor:
             self._notified_soon = True
             self._send_soon_notification()
 
+    @property
+    def resume_window(self) -> float:
+        """Seconds of history replayed at startup."""
+        longest = max(
+            [*self.durations.values(), *(p.duration for p in self.profiles)], default=0.0
+        )
+        if longest <= 0:
+            return RESUME_HOURS * 3600.0
+        return longest + RESUME_MARGIN
+
     @callback
     def _on_finished(self, cycle: Cycle) -> None:
+        if (
+            not self._live
+            and self._replay_start is not None
+            and cycle.start <= self._replay_start + 1
+        ):
+            # The replayed history began while the appliance was already
+            # working: only the end of that cycle is visible. It was handled
+            # before the restart, so it is neither learned nor reported.
+            _LOGGER.debug(
+                "%s: ignoring the partial cycle at the start of the resumed history",
+                self.name,
+            )
+            self.status = STATUS_IDLE
+            self.program = None
+            self.confidence = 0.0
+            self.remaining = self.end_time = self.progress = None
+            self._matcher = None
+            return
         profile = cycle.profile()
         recognised = self.program if self.status == STATUS_RUNNING else None
         known = {p.program for p in self.profiles}

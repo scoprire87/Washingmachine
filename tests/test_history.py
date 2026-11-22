@@ -63,3 +63,43 @@ async def test_history_import_and_resume(recorder_mock, hass, freezer):
     remaining = float(hass.states.get(REMAINING).state)
     true_remaining = 152.4 - (80 * 60 + 60 - 120) / 60
     assert abs(remaining - true_remaining) < 8, (remaining, true_remaining)
+
+
+async def test_restart_does_not_learn_the_end_of_a_past_cycle(recorder_mock, hass, freezer):
+    """A restart whose replayed history starts in the middle of a finished cycle.
+
+    The replay covers the longest known program plus 30 minutes. When a cycle
+    ended an hour before the restart, the replay begins inside it: its second
+    half must not be learned as a new program.
+    """
+    hass.states.async_set(POWER, "0", {"unit_of_measurement": "W", "device_class": "power"})
+    first, _ = _eco_runs()
+    entry = await _setup(hass)
+    await _replay(hass, freezer, first)
+    await async_wait_recording_done(hass)
+    known = hass.states.get(PROGRAM).attributes["known_programs"]
+    assert list(known) == ["Program 1"]
+    last = hass.states.get(STATUS).attributes["last_cycle"]
+    monitor = entry.runtime_data
+    # longest program (150.6 min) + 30 min
+    assert monitor.resume_window / 60 == pytest.approx(150.6 + 30, abs=1)
+
+    # restart one hour after the end: the replay starts ~30 min into the cycle
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(hours=1))
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    known = hass.states.get(PROGRAM).attributes["known_programs"]
+    assert list(known) == ["Program 1"] and known["Program 1"]["runs"] == 1
+    assert hass.states.get(STATUS).attributes["last_cycle"] == last
+    assert hass.states.get(STATUS).state == "idle"
+
+
+async def test_resume_window_follows_the_longest_program(hass):
+    entry = await _setup(hass)
+    monitor = entry.runtime_data
+    assert monitor.resume_window == 8 * 3600  # nothing known yet
+    await monitor.async_set_durations({"Eco+": 307 * 60, "Fast": 60 * 60})
+    assert monitor.resume_window == (307 + 30) * 60

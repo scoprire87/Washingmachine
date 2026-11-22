@@ -190,7 +190,7 @@ actions:
 
 ## Suggerimenti
 
-- Dopo un riavvio il ciclo in corso viene ripreso dallo storico (ultime 8 ore).
+- Dopo un riavvio il ciclo in corso viene ripreso dallo storico: viene riletta la durata del programma più lungo (display o lavaggi salvati) più 30 minuti, 8 ore se non ci sono ancora programmi. Un ciclo già finito che inizia prima di questa finestra viene ignorato, non imparato come programma nuovo.
 - Se i cicli finiscono troppo presto (pause lunghe, ammollo), aumenta il
   *ritardo di fine*.
 - Se lo standby o il display fanno partire cicli, alza la *potenza di avvio*;

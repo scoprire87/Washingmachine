@@ -48,7 +48,12 @@ MAX_RUNS_PER_PROGRAM = 5
 MAX_RUNS = 60
 
 # Hours of history replayed at startup to resume a cycle after a restart
+# History replayed at startup to resume a cycle after a restart: the longest
+# known program (display duration or learned run) plus a margin, so a cycle
+# that started before Home Assistant went down is seen from its beginning;
+# RESUME_HOURS when no program is known yet.
 RESUME_HOURS = 8
+RESUME_MARGIN = 30 * 60  # seconds
 # Days of history scanned by default by the import_history service
 DEFAULT_IMPORT_DAYS = 10
 
