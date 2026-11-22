@@ -4,6 +4,8 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
@@ -103,3 +105,57 @@ async def test_resume_window_follows_the_longest_program(hass):
     assert monitor.resume_window == 8 * 3600  # nothing known yet
     await monitor.async_set_durations({"Eco+": 307 * 60, "Fast": 60 * 60})
     assert monitor.resume_window == (307 + 30) * 60
+
+
+def _two_quick_runs(gap_minutes: float = 10):
+    """Two runs of the same short program, one right after the other."""
+    run = [(t, p) for t, p in load_trace("quick")]
+    end = run[-1][0]
+    offset = end + gap_minutes * 60
+    return run + [(t + offset, p) for t, p in run if t > 0], offset
+
+
+@pytest.mark.parametrize("restart_at", ["second_running", "both_finished"])
+async def test_two_short_cycles_in_a_row_and_a_restart(recorder_mock, hass, freezer, restart_at):
+    """Two quick programs in a row: a restart never creates a phantom program."""
+    hass.states.async_set(POWER, "0", {"unit_of_measurement": "W", "device_class": "power"})
+    entry = await _setup(hass, {"idle_power": 1, "end_delay": 5})
+    monitor = entry.runtime_data
+    await monitor.async_set_durations({"Fast": 60 * 60, "Eco+": 307 * 60})
+    # the first run is learned and named
+    trace, offset = _two_quick_runs()
+    first = [(t, p) for t, p in trace if t < offset]
+    await _replay(hass, freezer, first)
+    freezer.tick(timedelta(minutes=6))
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass, dt_util.utcnow())
+    await hass.async_block_till_done()
+    await hass.services.async_call(
+        DOMAIN, "rename_program", {"entity_id": STATUS, "program": "Program 1", "new_name": "Fast"},
+        blocking=True,
+    )
+    # the second run starts 10 minutes after the end of the first
+    second = [(t - offset + 600 - 6 * 60, p) for t, p in trace if t >= offset]
+    until = 30 * 60 if restart_at == "second_running" else None
+    await _replay(hass, freezer, second, until=until)
+    if restart_at == "both_finished":
+        freezer.tick(timedelta(minutes=10))
+        async_fire_time_changed(hass, dt_util.utcnow())
+        await hass.async_block_till_done()
+    runs_before = hass.states.get(PROGRAM).attributes["known_programs"]["Fast"]["runs"]
+    await async_wait_recording_done(hass)
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(seconds=60))
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    known = hass.states.get(PROGRAM).attributes["known_programs"]
+    assert list(known) == ["Fast"], known
+    assert known["Fast"]["runs"] == runs_before
+    if restart_at == "second_running":
+        assert hass.states.get(STATUS).state == "running"
+        assert hass.states.get(PROGRAM).state == "Fast"
+    else:
+        assert known["Fast"]["runs"] == 2
