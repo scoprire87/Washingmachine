@@ -53,6 +53,11 @@ RESUME_HOURS = 8
 DEFAULT_IMPORT_DAYS = 10
 
 STATUS_IDLE = "idle"
+# Drawing power, but not (yet) a confirmed cycle: pre-wash before the first
+# heating, display, door. Becomes "running" when the start power is reached.
+# Only from "idle": a finished appliance stays "finished" (to be unloaded)
+# while its door is opened, until a new cycle is confirmed.
+STATUS_ACTIVE = "active"
 STATUS_RUNNING = "running"
 STATUS_FINISHED = "finished"
 

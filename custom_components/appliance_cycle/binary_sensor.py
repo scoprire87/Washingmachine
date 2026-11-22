@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import ApplianceConfigEntry
-from .const import STATUS_RUNNING
+from .const import STATUS_ACTIVE, STATUS_RUNNING
 from .entity import ApplianceEntity
 
 
@@ -22,10 +22,10 @@ async def async_setup_entry(
 
 
 class ApplianceRunning(ApplianceEntity, BinarySensorEntity):
-    """On while a cycle is running."""
+    """On while the appliance works: cycle running, or drawing power before it."""
 
     _attr_device_class = BinarySensorDeviceClass.RUNNING
 
     @property
     def is_on(self) -> bool:
-        return self.monitor.status == STATUS_RUNNING
+        return self.monitor.status in (STATUS_RUNNING, STATUS_ACTIVE)
