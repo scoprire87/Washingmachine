@@ -188,8 +188,10 @@ actions:
 
 ## Tips
 
-- After a restart a running cycle is resumed from the recorder history
-  (last 8 hours).
+- After a restart a running cycle is resumed from the recorder history: the
+  replay covers the longest program (display duration or stored runs) plus 30
+  minutes, or 8 hours while no program is known. A finished cycle that started
+  before that window is ignored instead of being learned as a new program.
 - If cycles end too early (long pauses, soaking), increase the *end delay*.
 - If the standby or display consumption triggers cycles, raise the *start
   power*; if the end is never detected, raise the *idle power*.
