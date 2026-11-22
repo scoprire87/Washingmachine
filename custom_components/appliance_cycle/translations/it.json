@@ -151,6 +151,7 @@
                 "name": "Stato",
                 "state": {
                     "idle": "Inattivo",
+                    "active": "Attiva",
                     "running": "In funzione",
                     "finished": "Finito"
                 }

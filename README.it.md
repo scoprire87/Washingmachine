@@ -69,8 +69,8 @@ l'elettrodomestico lavora; la maggior parte delle prese smart lo fa.
 
 | Entità | Descrizione |
 | --- | --- |
-| `binary_sensor.<nome>_running` | acceso durante il ciclo |
-| `sensor.<nome>_status` | `idle`, `running`, `finished`; attributi `started`, `last_cycle` |
+| `binary_sensor.<nome>_running` | acceso durante il ciclo e mentre l'elettrodomestico assorbe potenza (`active`) |
+| `sensor.<nome>_status` | `idle`, `active` (assorbe potenza ma il ciclo non è ancora confermato, es. prelavaggio), `running`, `finished`; attributi `power`, `started`, `last_cycle` |
 | `sensor.<nome>_program` | programma riconosciuto; attributi `confidence`, `known_programs` |
 | `sensor.<nome>_remaining_time` | minuti alla fine |
 | `sensor.<nome>_estimated_end` | ora di fine stimata |

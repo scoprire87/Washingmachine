@@ -49,12 +49,15 @@ from .const import (
     MAX_RUNS_PER_PROGRAM,
     NAME_PROGRAM_ACTION,
     RESUME_HOURS,
+    STATUS_ACTIVE,
     STATUS_FINISHED,
     STATUS_IDLE,
     STATUS_RUNNING,
 )
 from .engine import (
     BIN_SECONDS,
+    IDLE,
+    PENDING,
     RUNNING,
     Cycle,
     CycleDetector,
@@ -183,6 +186,8 @@ class ApplianceMonitor:
         self.started: datetime | None = None
         self.progress: float | None = None  # %
         self.energy: float | None = None  # Wh of the current (or last) cycle
+        self.power: float | None = None  # W, last reading of the power sensor
+        self._started_before_active: datetime | None = None
         self.last_cycle: dict[str, Any] | None = None
 
         self._matcher: ProgramMatcher | None = None
@@ -355,10 +360,31 @@ class ApplianceMonitor:
 
     @callback
     def _feed(self, timestamp: float, power: float) -> None:
+        self.power = power
         self._handle_events(self.detector.update(timestamp, power))
+        self._sync_active()
         # while replaying the history the estimate is computed once at the end
         if self._live and self.status == STATUS_RUNNING and self.detector.state == RUNNING:
             self._update_estimate(timestamp)
+
+    @callback
+    def _sync_active(self) -> None:
+        """"active" while power is drawn but no cycle is confirmed yet."""
+        detector = self.detector
+        if self.status == STATUS_ACTIVE and detector.state == IDLE:
+            # only display or door: it never became a cycle
+            self.status = STATUS_IDLE
+            self.started = self._started_before_active
+            return
+        if detector.state != PENDING or detector.cycle is None:
+            return
+        if self.status == STATUS_IDLE:
+            self._started_before_active = self.started
+            self.status = STATUS_ACTIVE
+            self.started = dt_util.utc_from_timestamp(detector.cycle.start)
+            self.program = None
+            self.confidence = 0.0
+            self.remaining = self.end_time = self.progress = None
 
     @callback
     def _handle_events(self, events: list[tuple[str, Cycle]]) -> None:
@@ -690,6 +716,7 @@ class ApplianceMonitor:
     def _async_deadline(self, now: datetime) -> None:
         self._deadline_unsub = None
         self._handle_events(self.detector.tick(now.timestamp()))
+        self._sync_active()
         self._schedule()
         self._notify_listeners()
 
@@ -725,6 +752,7 @@ class ApplianceMonitor:
             self.status = STATUS_IDLE
             self.remaining = None
             self.progress = None
+            self._sync_active()  # a new program may already be in its pre-wash
             self._notify_listeners()
 
     # ------------------------------------------------------------ notifications

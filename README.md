@@ -69,8 +69,8 @@ running; most smart plugs do.
 
 | Entity | Description |
 | --- | --- |
-| `binary_sensor.<name>_running` | on while a cycle is running |
-| `sensor.<name>_status` | `idle`, `running`, `finished`; attributes `started`, `last_cycle` |
+| `binary_sensor.<name>_running` | on while a cycle is running and while the appliance draws power (`active`) |
+| `sensor.<name>_status` | `idle`, `active` (drawing power but no confirmed cycle yet, e.g. pre-wash), `running`, `finished`; attributes `power`, `started`, `last_cycle` |
 | `sensor.<name>_program` | recognised program; attributes `confidence`, `known_programs` |
 | `sensor.<name>_remaining_time` | minutes to the end |
 | `sensor.<name>_estimated_end` | timestamp of the estimated end |

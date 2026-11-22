@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import ApplianceConfigEntry
-from .const import STATUS_FINISHED, STATUS_IDLE, STATUS_RUNNING
+from .const import STATUS_ACTIVE, STATUS_FINISHED, STATUS_IDLE, STATUS_RUNNING
 from .entity import ApplianceEntity
 from .monitor import ApplianceMonitor
 
@@ -39,9 +39,10 @@ SENSORS: tuple[ApplianceSensorDescription, ...] = (
     ApplianceSensorDescription(
         key="status",
         device_class=SensorDeviceClass.ENUM,
-        options=[STATUS_IDLE, STATUS_RUNNING, STATUS_FINISHED],
+        options=[STATUS_IDLE, STATUS_ACTIVE, STATUS_RUNNING, STATUS_FINISHED],
         value=lambda m: m.status,
         attributes=lambda m: {
+            "power": m.power,
             "started": m.started.isoformat() if m.started else None,
             "last_cycle": m.last_cycle,
         },
