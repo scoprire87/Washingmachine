@@ -257,3 +257,75 @@ async def test_durations_from_the_options(hass) -> None:
     )
     field = next(k for k in result["data_schema"].schema if k == "durations")
     assert field.description["suggested_value"] == "Intenso 3:16\nEco 4:39"
+
+
+def _eco_with_silent_drying():
+    """An eco run whose drying stays at 0 W, with a 2.5 W blip every 9 minutes.
+
+    This is how the real eco program dries after its last heating: plain power
+    detection sees "off" for more than the end delay and ends the cycle ~1 h 45
+    min early.
+    """
+    trace = load_trace("eco")
+    split = next(t for t, p in trace if t > 1200 * 60 and p > 4)
+    run = [(t, p) for t, p in trace if t < split - 600]
+    last_heat = max(t for t, p in run if p >= 150)
+    active = [(t, p) for t, p in run if t <= last_heat + 300]
+    t = last_heat + 300
+    tail: list[tuple[float, float]] = [(t, 0.0)]
+    for _ in range(12):  # 108 minutes of silence with short blips
+        t += 9 * 60
+        tail += [(t, 2.5), (t + 5, 0.0)]
+    tail += [(t + 60, 15.0), (t + 60 + 20 * 60, 0.0)]  # fan, then really off
+    end = t + 60 + 20 * 60
+    start = next(t for t, p in active if p > 1)
+    return active + tail, start, end
+
+
+async def test_display_duration_keeps_a_silent_drying_open(hass, freezer) -> None:
+    async_mock_service(hass, "notify", PHONE)
+    await _setup(hass, DISHWASHER)
+    trace, start, end = _eco_with_silent_drying()
+    total_min = (end - start) / 60
+    await hass.services.async_call(
+        DOMAIN, "set_program_durations",
+        {"entity_id": STATUS, "programs": {"Eco": round(total_min) + 3}}, blocking=True,
+    )
+
+    # first run: unknown program, nothing keeps it open: it ends too early
+    await _replay(hass, freezer, trace)
+    await _advance(hass, freezer, 900)
+    last = hass.states.get(STATUS).attributes["last_cycle"]
+    assert last["duration"] / 60 < total_min - 60
+    await hass.services.async_call(
+        DOMAIN, "rename_program", {"entity_id": STATUS, "program": "Program 1", "new_name": "Eco"},
+        blocking=True,
+    )
+
+    # second run: recognised as Eco, it stays running through the silent drying
+    seen = []
+
+    def check(seconds):
+        if seconds > end - 30 * 60 and not seen:
+            seen.append(hass.states.get(STATUS).state)
+
+    await _replay(hass, freezer, trace, check=check)
+    assert seen == ["running"]
+    await _advance(hass, freezer, 900)
+    last = hass.states.get(STATUS).attributes["last_cycle"]
+    assert hass.states.get(STATUS).state == "finished"
+    assert last["program"] == "Eco"
+    # the end is the last activity (the fan), not the end of the hold
+    assert last["duration"] / 60 == pytest.approx(total_min, abs=2)
+
+
+def test_hold_until_delays_the_end_but_keeps_the_real_end_time() -> None:
+    detector = CycleDetector(idle_power=1, start_power=150, end_delay=300)
+    detector.update(0, 2000)
+    detector.update(600, 0)  # silent drying
+    detector.hold_until = 3600
+    assert detector.tick(1200) == []  # end delay passed, but held
+    assert detector.next_deadline() == 3600
+    [(kind, cycle)] = detector.tick(3600)
+    assert kind == "finished" and cycle.end == 600
+    assert detector.hold_until is None

@@ -54,6 +54,10 @@ MAX_RUNS = 60
 # RESUME_HOURS when no program is known yet.
 RESUME_HOURS = 8
 RESUME_MARGIN = 30 * 60  # seconds
+# A recognised program with a display duration is not considered finished
+# before its display duration minus this margin (seconds): the drying of some
+# programs (Eco) stays at 0 W for long stretches.
+HOLD_MARGIN = 10 * 60
 # Days of history scanned by default by the import_history service
 DEFAULT_IMPORT_DAYS = 10
 

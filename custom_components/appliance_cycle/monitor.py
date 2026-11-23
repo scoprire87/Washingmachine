@@ -45,6 +45,7 @@ from .const import (
     EVENT_FINISHED,
     EVENT_STARTED,
     EVENT_UNKNOWN_PROGRAM,
+    HOLD_MARGIN,
     MAX_RUNS,
     MAX_RUNS_PER_PROGRAM,
     NAME_PROGRAM_ACTION,
@@ -190,6 +191,8 @@ class ApplianceMonitor:
         self.power: float | None = None  # W, last reading of the power sensor
         self._started_before_active: datetime | None = None
         self._replay_start: float | None = None
+        # program with a display duration recognised in the running cycle
+        self._kept_program: str | None = None
         self.last_cycle: dict[str, Any] | None = None
 
         self._matcher: ProgramMatcher | None = None
@@ -367,8 +370,16 @@ class ApplianceMonitor:
         self.power = power
         self._handle_events(self.detector.update(timestamp, power))
         self._sync_active()
-        # while replaying the history the estimate is computed once at the end
-        if self._live and self.status == STATUS_RUNNING and self.detector.state == RUNNING:
+        # while replaying the history the estimate is updated once per bin
+        # (it sets how long the recognised program keeps the cycle open)
+        if self.status == STATUS_RUNNING and self.detector.state == RUNNING and (
+            self._live
+            or (
+                self.detector.cycle is not None
+                and int((timestamp - self.detector.cycle.start) // BIN_SECONDS)
+                > self._bins_done
+            )
+        ):
             self._update_estimate(timestamp)
 
     @callback
@@ -411,6 +422,7 @@ class ApplianceMonitor:
         self.energy = 0.0
         self._matcher = ProgramMatcher(self.profiles)
         self._bins_done = 0
+        self._kept_program = None
         self._notified_soon = False
         if self._live:
             self.hass.bus.async_fire(
@@ -432,6 +444,13 @@ class ApplianceMonitor:
         elapsed = now - cycle.start
         self.energy = energy_wh(cycle.samples, cycle.start, now)
         remaining, program, confidence = estimate(self._matcher.matches())
+        if self.display_duration(program) is not None:
+            self._kept_program = program
+        elif remaining is None and self._kept_program is not None:
+            # recognised earlier, but the cycle no longer looks like the stored
+            # runs (e.g. a drying phase they miss): keep the program and its
+            # display countdown until the end of the cycle
+            remaining, program, confidence = 0.0, self._kept_program, self.confidence
         if remaining is None:
             # a program not learned yet: better no estimate than a wrong one
             self.remaining = self.end_time = self.progress = self.program = None
@@ -440,6 +459,10 @@ class ApplianceMonitor:
         if (display := self.display_duration(program)) is not None:
             # the program is recognised: count down like the appliance display
             remaining = max(0.0, display - elapsed)
+            # and do not end the cycle before the display says so
+            hold = cycle.start + display - HOLD_MARGIN
+            if self.detector.hold_until is None or hold > self.detector.hold_until:
+                self.detector.hold_until = hold
         else:
             # the estimate refers to the last complete bin
             remaining = max(0.0, remaining - (elapsed - self._bins_done * BIN_SECONDS))

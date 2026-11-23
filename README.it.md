@@ -46,7 +46,10 @@ Poi apri **Configura**. Il menu offre:
 - **Durate dei programmi (display)**: un programma per riga con la durata
   indicata dal display, ad esempio `Intenso 3:16`. Quando il ciclo è
   riconosciuto come uno di questi programmi, il tempo rimanente è un conto alla
-  rovescia da quella durata, come sul display;
+  rovescia da quella durata, come sul display. Il ciclo non viene considerato
+  finito prima di quella durata meno 10 minuti (l'asciugatura di alcuni
+  programmi, come l'Eco, resta a 0 W anche per un'ora) e il programma
+  riconosciuto resta anche se la fine del ciclo non somiglia ai lavaggi salvati;
 - **Carica i programmi preimpostati** (lavastoviglie): programmi registrati da
   una lavastoviglie reale, utili se hai lo stesso modello. I programmi imparati
   con un nome automatico che corrispondono a uno di questi ne prendono il nome;

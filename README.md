@@ -46,7 +46,10 @@ Then open **Configure** on the entry. The menu offers:
 - **Program durations (display)**: one program per line with the duration the
   appliance display shows, for example `Intenso 3:16`. When the running cycle
   is recognised as one of them, the remaining time counts down from that
-  duration, like the display;
+  duration, like the display. The cycle is not considered finished before that
+  duration minus 10 minutes (the drying of some programs, like Eco, stays at
+  0 W even for an hour) and the recognised program is kept even if the end of
+  the cycle does not look like the stored runs;
 - **Load the preset programs** (dishwasher): programs recorded from a real
   dishwasher, useful if you have the same model. Learned programs with an
   automatic name that match one of them take its name;
