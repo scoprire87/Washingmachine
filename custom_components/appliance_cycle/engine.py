@@ -554,6 +554,19 @@ def format_duration(seconds: float) -> str:
     return f"{hours}:{minutes:02d}"
 
 
+def parse_program_reply(text: str) -> tuple[str, float | None]:
+    """A typed answer: program name, optionally followed by a duration.
+
+    "Eco 2:41" -> ("Eco", 9660.0); "eco rapido" -> ("eco rapido", None).
+    """
+    text = " ".join(text.split())
+    try:
+        [(name, seconds)] = parse_durations_text(text).items()
+    except ValueError:
+        return text, None
+    return name, seconds
+
+
 def parse_durations_text(text: str) -> dict[str, float]:
     """Program durations, one per line: "Intenso 3:16" or "Intenso = 3:16"."""
     durations: dict[str, float] = {}

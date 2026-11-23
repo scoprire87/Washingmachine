@@ -169,10 +169,13 @@ async def test_new_program_question_and_display_countdown(hass, freezer) -> None
                 "mobile_app_notification_action",
                 {"action": f"{NAME_PROGRAM_ACTION}|other|123", "reply_text": "Eco"},
             )
+            assert action["textInputPlaceholder"] == "Eco 2:41"
+            # name and time left on the display
             hass.bus.async_fire(
                 "mobile_app_notification_action",
-                {"action": action["action"], "reply_text": "  intenso "},
+                {"action": action["action"], "reply_text": "  intenso 2:40 "},
             )
+            asked_at.append((seconds - start) / 60 + 160)  # expected total
         elif asked_at and not after_reply and seconds - start > 60 * 60:
             after_reply.update(
                 program=hass.states.get(PROGRAM).state,
@@ -185,16 +188,18 @@ async def test_new_program_question_and_display_countdown(hass, freezer) -> None
     assert phone[0].data["title"] == "Dishwasher: which program is it?"
     assert len(created) == 1 and "does not match any known program" in created[0].data["message"]
     assert unknown[0].data["running"] is True
-    # from the answer on: the program and the display countdown
+    # from the answer on: the program and the countdown of the time it gave
+    # (elapsed when answering + 2:40), not the catalog's 3:16
+    total = asked_at[1]
     assert after_reply["program"] == "Intenso"
-    assert after_reply["remaining"] == pytest.approx(196 - after_reply["elapsed"], abs=1.5)
+    assert after_reply["remaining"] == pytest.approx(total - after_reply["elapsed"], abs=1.5)
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    assert entry.runtime_data.durations["Intenso"] == 196 * 60  # catalog unchanged
     assert dismissed and dismissed[0].data["notification_id"] == created[0].data["notification_id"]
 
-    # this run is shorter than the display (176 vs 196 min): "finished" comes
-    # 10 minutes before the display end, the recorded end is the real one
-    await _advance(hass, freezer, 600)
-    assert hass.states.get(STATUS).state == "running"
-    await _advance(hass, freezer, 900)
+    # "finished" comes at the latest 10 minutes before the given end; the
+    # recorded end is the real one
+    await _advance(hass, freezer, 1500)
     last = hass.states.get(STATUS).attributes["last_cycle"]
     assert last["program"] == "Intenso"  # written like the display entry
     assert last["duration"] / 60 == pytest.approx(176, abs=1)
@@ -372,3 +377,35 @@ async def test_short_unknown_cycle_is_asked_at_the_end(hass, freezer) -> None:
     await hass.async_block_till_done()
     assert hass.states.get(STATUS).attributes["last_cycle"]["program"] == "Prelavaggio"
     assert list(hass.states.get(PROGRAM).attributes["known_programs"]) == ["Prelavaggio"]
+
+
+async def test_answer_with_time_left_for_a_program_without_display(hass, freezer) -> None:
+    """The answer gives a new program its display duration."""
+    phone = async_mock_service(hass, "notify", PHONE)
+    entry = await _setup(hass, DISHWASHER)
+    trace = load_trace("glasses")
+    start = next(t for t, p in trace if p > 1)
+
+    def answer(seconds):
+        if phone and not getattr(answer, "done", False):
+            answer.done = True
+            answer.elapsed = seconds - start
+            action = phone[0].data["data"]["actions"][0]["action"]
+            hass.bus.async_fire(
+                "mobile_app_notification_action", {"action": action, "reply_text": "Bicchieri 95"}
+            )
+
+    await _replay(hass, freezer, trace, check=answer)
+    expected = round((answer.elapsed + 95 * 60) / 60) * 60
+    assert entry.runtime_data.durations == {"Bicchieri": expected}
+    await _advance(hass, freezer, 1500)
+    assert hass.states.get(STATUS).attributes["last_cycle"]["program"] == "Bicchieri"
+
+
+def test_parse_program_reply() -> None:
+    from custom_components.appliance_cycle.engine import parse_program_reply
+
+    assert parse_program_reply("Eco 2:41") == ("Eco", 161 * 60)
+    assert parse_program_reply("  eco   rapido ") == ("eco rapido", None)
+    assert parse_program_reply("Eco 1/2 carico 95") == ("Eco 1/2 carico", 95 * 60)
+    assert parse_program_reply("intenso") == ("intenso", None)

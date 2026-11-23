@@ -97,9 +97,12 @@ the same profile are grouped into one program (`Program 1`, `Program 2`, ...).
 Give them meaningful names from **Configure**.
 
 When **30 minutes** after its start a cycle still matches no known program you
-are asked **"which program is it?"**: with the answer the cycle takes that
-program (counting down from its display duration) and is stored under that
-name. If the program is recognised earlier, no question is sent. A cycle of a
+are asked **"which program is it?"**. Answer with the name and the time left
+on the display, e.g. `Eco 2:41` (or `Eco 161`): the cycle takes that program,
+its total duration is the time elapsed plus the time given, the remaining time
+follows it and the cycle is stored under that name. A program without a
+display duration yet gets it. The name alone also works: the stored display
+duration is used. If the program is recognised earlier, no question is sent. A cycle of a
 new program shorter than 30 minutes is instead asked about when it finishes,
 **"which program was it?"**: mobile app notifications
 (`notify.mobile_app_...`) have a *Reply* button, just type the name (e.g.

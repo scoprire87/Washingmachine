@@ -71,6 +71,7 @@ from .engine import (
     energy_wh,
     estimate,
     load_presets,
+    parse_program_reply,
     program_key,
     read_history_csv,
     resample,
@@ -95,7 +96,7 @@ MESSAGES = {
         "new_program": "Program {n}",
         "unknown_title": "{name}: which program was it?",
         "running_title": "{name}: which program is it?",
-        "running": "The cycle started at {time} does not match any known program. Reply with the program name{examples}: the remaining time will follow its display duration.",
+        "running": "The cycle started at {time} does not match any known program. Reply with the program name and the time left on the display, e.g. \u201cEco 2:41\u201d{examples}.",
         "running_panel": "Reply from the phone notification.",
         "unknown": "A {duration} cycle did not match any known program and was saved as \u201c{program}\u201d. Reply with the program name{examples}.",
         "unknown_panel": "Reply from the phone notification, or rename \u201c{program}\u201d from the integration options (Rename a program).",
@@ -110,7 +111,7 @@ MESSAGES = {
         "new_program": "Programma {n}",
         "unknown_title": "{name}: che programma era?",
         "running_title": "{name}: che programma è?",
-        "running": "Il lavaggio partito alle {time} non corrisponde a nessun programma conosciuto. Rispondi con il nome del programma{examples}: il tempo rimanente seguirà la durata del display.",
+        "running": "Il lavaggio partito alle {time} non corrisponde a nessun programma conosciuto. Rispondi con il nome del programma e il tempo che manca sul display, ad esempio \u00abEco 2:41\u00bb{examples}.",
         "running_panel": "Rispondi dalla notifica sul telefono.",
         "unknown": "Un ciclo di {duration} non corrisponde a nessun programma conosciuto ed \u00e8 stato salvato come \u00ab{program}\u00bb. Rispondi con il nome del programma{examples}.",
         "unknown_panel": "Rispondi dalla notifica sul telefono, oppure rinomina \u00ab{program}\u00bb dalle opzioni dell'integrazione (Rinomina un programma).",
@@ -203,6 +204,9 @@ class ApplianceMonitor:
         # program the user named for the running cycle, and the cycle (start
         # timestamp) the "which program?" question was asked for
         self._user_program: str | None = None
+        # total duration of the running cycle from the user's answer (elapsed
+        # time + time left on the display), in seconds
+        self._user_total: float | None = None
         self._asked_cycle: float | None = None
         self.last_cycle: dict[str, Any] | None = None
 
@@ -435,6 +439,7 @@ class ApplianceMonitor:
         self._bins_done = 0
         self._kept_program = None
         self._user_program = None
+        self._user_total = None
         self._notified_soon = False
         if self._live:
             self.hass.bus.async_fire(
@@ -461,13 +466,13 @@ class ApplianceMonitor:
             if program != self._user_program:
                 remaining = None
             program, confidence = self._user_program, 1.0
-            if remaining is None and self.display_duration(program) is None:
+            if remaining is None and self._cycle_display(program) is None:
                 # no display duration and no stored run: name only, no estimate
                 self.program, self.confidence = program, confidence
                 self.remaining = self.end_time = self.progress = None
                 return
             remaining = remaining if remaining is not None else 0.0
-        elif self.display_duration(program) is not None:
+        elif self._cycle_display(program) is not None:
             self._kept_program = program
         elif remaining is None and self._kept_program is not None:
             # recognised earlier, but the cycle no longer looks like the stored
@@ -484,7 +489,7 @@ class ApplianceMonitor:
         if self._asked_cycle == cycle.start and self._user_program is None:
             # recognised after the question: it is no longer needed
             self._dismiss_question(cycle.start)
-        if (display := self.display_duration(program)) is not None:
+        if (display := self._cycle_display(program)) is not None:
             # the program is recognised: count down like the appliance display
             remaining = max(0.0, display - elapsed)
             # and do not end the cycle before the display says so
@@ -651,6 +656,12 @@ class ApplianceMonitor:
                 info["display"] = round(display / 60)
             result[name] = info
         return result
+
+    def _cycle_display(self, program: str | None) -> float | None:
+        """Display duration for the running cycle: the user's answer wins."""
+        if self._user_total is not None and program == self._user_program:
+            return self._user_total
+        return self.display_duration(program)
 
     def display_duration(self, program: str | None) -> float | None:
         """Duration (s) shown on the appliance display for a program."""
@@ -879,10 +890,19 @@ class ApplianceMonitor:
         return f"{DOMAIN}_{self.entry.entry_id}_unknown_{int(cycle_start)}"
 
     @callback
-    def _ask(self, cycle_start: float, title: str, message: str, panel: str, data: dict[str, Any]) -> None:
+    def _ask(
+        self,
+        cycle_start: float,
+        title: str,
+        message: str,
+        panel: str,
+        data: dict[str, Any],
+        placeholder: str | None = None,
+    ) -> None:
         """Ask which program a cycle is: phone (text reply), panel and event."""
         text = _messages(self.hass)
-        names = list(self.durations)[:3]
+        if placeholder is None:
+            placeholder = ", ".join(list(self.durations)[:3])
         action = f"{NAME_PROGRAM_ACTION}|{self.entry.entry_id}|{int(cycle_start)}"
         for service in self.notify_services:
             domain, _, name = service.partition(".")
@@ -898,7 +918,7 @@ class ApplianceMonitor:
                             "title": text["reply"],
                             "behavior": "textInput",
                             "textInputButtonTitle": text["reply"],
-                            "textInputPlaceholder": ", ".join(names),
+                            "textInputPlaceholder": placeholder,
                         }
                     ],
                 }
@@ -938,6 +958,7 @@ class ApplianceMonitor:
             text["running"].format(time=started.strftime("%H:%M"), examples=self._examples()),
             text["running_panel"],
             {"program": None, "started": started.isoformat(), "running": True},
+            placeholder="Eco 2:41",
         )
 
     @callback
@@ -983,14 +1004,27 @@ class ApplianceMonitor:
             return
         self.hass.async_create_task(self.async_name_cycle(cycle_start, reply))
 
-    async def async_name_cycle(self, cycle_start: float, name: str) -> bool:
-        """The user said which program the cycle started at ``cycle_start`` is."""
+    async def async_name_cycle(self, cycle_start: float, reply: str) -> bool:
+        """The user said which program the cycle started at ``cycle_start`` is.
+
+        The reply is the program name, optionally followed by the time left on
+        the display ("Eco 2:41"): while the cycle runs, that time plus the time
+        elapsed is its total duration.
+        """
+        name, left = parse_program_reply(reply)
         name = self._canonical_name(name)
         cycle = self.detector.cycle
         if self.status == STATUS_RUNNING and cycle is not None and abs(cycle.start - cycle_start) < 2:
             # still running: the program follows the user's answer
+            now = dt_util.utcnow().timestamp()
             self._user_program = name
-            self._update_estimate(dt_util.utcnow().timestamp())
+            if left is not None:
+                self._user_total = now - cycle.start + left
+                if self.display_duration(name) is None:
+                    # a program without a display duration yet: remember it
+                    self.durations[name] = round(self._user_total / 60) * 60.0
+                    await self._async_save()
+            self._update_estimate(now)
             self._schedule()
         elif self.last_cycle and abs(
             dt_util.parse_datetime(self.last_cycle["started"]).timestamp() - cycle_start

@@ -99,9 +99,13 @@ consumo. Cicli con lo stesso profilo formano un programma (`Programma 1`,
 `Programma 2`, ...), che puoi rinominare da **Configura**.
 
 Quando dopo **30 minuti** dall'avvio il ciclo non corrisponde ancora a nessun
-programma conosciuto arriva la domanda **«che programma è?»**: rispondendo, il
-ciclo prende quel programma (con il conto alla rovescia della durata del
-display) e viene salvato con quel nome. Se il programma viene riconosciuto
+programma conosciuto arriva la domanda **«che programma è?»**. Si risponde con
+il nome e il tempo che manca sul display, ad esempio `Eco 2:41` (oppure
+`Eco 161`): il ciclo prende quel programma, la durata totale è il tempo già
+trascorso più quello indicato, il tempo rimanente segue quella durata e il
+ciclo viene salvato con quel nome. Se il programma non aveva ancora una durata
+del display, gli viene assegnata. Basta anche solo il nome: in quel caso vale
+la durata del display già salvata. Se il programma viene riconosciuto
 prima, la domanda non parte. Un ciclo più corto di 30 minuti mai visto riceve
 invece, a fine ciclo, la domanda **«che programma era?»**: sulle notifiche
 dell'app (`notify.mobile_app_...`) c'è il pulsante *Rispondi*, basta scrivere
