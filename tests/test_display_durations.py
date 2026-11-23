@@ -149,38 +149,62 @@ async def test_new_program_question_and_display_countdown(hass, freezer) -> None
             blocking=True,
         )
 
-    # first run: never seen, the whole drying phase is part of the cycle
+    # first run: never seen. After 30 minutes the user is asked which program
+    # is running and answers "intenso" from the phone, while it still runs.
     trace = load_trace("intensive")
-    await _replay(hass, freezer, trace)
-    await _advance(hass, freezer, 600)
-    last = hass.states.get(STATUS).attributes["last_cycle"]
-    assert last["program"] == "Program 1"
-    assert last["duration"] / 60 == pytest.approx(176, abs=1)
+    entry_id = hass.config_entries.async_entries(DOMAIN)[0].entry_id
+    start = next(t for t, p in trace if p > 1)
+    asked_at = []
+    after_reply = {}
 
-    # ... and the user is asked which program it was
-    assert [c.data["title"] for c in phone] == [
-        "Dishwasher: finished", "Dishwasher: which program was it?",
-    ]
-    action = phone[1].data["data"]["actions"][0]
-    assert action["behavior"] == "textInput"
-    assert action["action"] == f"{NAME_PROGRAM_ACTION}|{hass.config_entries.async_entries(DOMAIN)[0].entry_id}|Program 1"
-    assert len(created) == 1 and "Program 1" in created[0].data["message"]
-    assert unknown[0].data["program"] == "Program 1"
+    def answer(seconds):
+        questions = [c for c in phone if "which program" in c.data["title"]]
+        if questions and not asked_at:
+            asked_at.append((seconds - start) / 60)
+            action = questions[0].data["data"]["actions"][0]
+            assert action["behavior"] == "textInput"
+            assert action["action"].startswith(f"{NAME_PROGRAM_ACTION}|{entry_id}|")
+            # replies for other appliances are ignored
+            hass.bus.async_fire(
+                "mobile_app_notification_action",
+                {"action": f"{NAME_PROGRAM_ACTION}|other|123", "reply_text": "Eco"},
+            )
+            hass.bus.async_fire(
+                "mobile_app_notification_action",
+                {"action": action["action"], "reply_text": "  intenso "},
+            )
+        elif asked_at and not after_reply and seconds - start > 60 * 60:
+            after_reply.update(
+                program=hass.states.get(PROGRAM).state,
+                remaining=float(hass.states.get(REMAINING).state),
+                elapsed=(seconds - start) / 60,
+            )
 
-    # replies for other appliances are ignored; the user answers "intenso"
-    hass.bus.async_fire(
-        "mobile_app_notification_action",
-        {"action": f"{NAME_PROGRAM_ACTION}|other|Program 1", "reply_text": "Eco"},
-    )
-    hass.bus.async_fire(
-        "mobile_app_notification_action",
-        {"action": action["action"], "reply_text": "  intenso "},
-    )
-    await hass.async_block_till_done()
-    known = hass.states.get(PROGRAM).attributes["known_programs"]
-    assert list(known) == ["Intenso"]  # written like the display entry
-    assert known["Intenso"]["display"] == 196
+    await _replay(hass, freezer, trace, check=answer)
+    assert 30 <= asked_at[0] <= 32
+    assert phone[0].data["title"] == "Dishwasher: which program is it?"
+    assert len(created) == 1 and "does not match any known program" in created[0].data["message"]
+    assert unknown[0].data["running"] is True
+    # from the answer on: the program and the display countdown
+    assert after_reply["program"] == "Intenso"
+    assert after_reply["remaining"] == pytest.approx(196 - after_reply["elapsed"], abs=1.5)
     assert dismissed and dismissed[0].data["notification_id"] == created[0].data["notification_id"]
+
+    # this run is shorter than the display (176 vs 196 min): "finished" comes
+    # 10 minutes before the display end, the recorded end is the real one
+    await _advance(hass, freezer, 600)
+    assert hass.states.get(STATUS).state == "running"
+    await _advance(hass, freezer, 900)
+    last = hass.states.get(STATUS).attributes["last_cycle"]
+    assert last["program"] == "Intenso"  # written like the display entry
+    assert last["duration"] / 60 == pytest.approx(176, abs=1)
+    known = hass.states.get(PROGRAM).attributes["known_programs"]
+    assert list(known) == ["Intenso"]
+    assert known["Intenso"]["display"] == 196
+    # asked once, while running: no second question at the end
+    assert [c.data["title"] for c in phone] == [
+        "Dishwasher: which program is it?", "Dishwasher: finished",
+    ]
 
     # second run, 12% slower: recognised, remaining time = display countdown
     second = _stretched(trace, 1.12)
@@ -329,3 +353,22 @@ def test_hold_until_delays_the_end_but_keeps_the_real_end_time() -> None:
     [(kind, cycle)] = detector.tick(3600)
     assert kind == "finished" and cycle.end == 600
     assert detector.hold_until is None
+
+
+async def test_short_unknown_cycle_is_asked_at_the_end(hass, freezer) -> None:
+    """A cycle shorter than 30 minutes is asked about when it finishes."""
+    phone = async_mock_service(hass, "notify", PHONE)
+    await _setup(hass, DISHWASHER)
+    await hass.services.async_call(
+        DOMAIN, "set_program_durations", {"entity_id": STATUS, "programs": "Prelavaggio 0:20"},
+        blocking=True,
+    )
+    await _replay(hass, freezer, [(0, 0), (60, 1900), (900, 1900), (1200, 40), (1260, 0)])
+    await _advance(hass, freezer, 900)
+    titles = [c.data["title"] for c in phone]
+    assert titles == ["Dishwasher: finished", "Dishwasher: which program was it?"]
+    action = phone[1].data["data"]["actions"][0]["action"]
+    hass.bus.async_fire("mobile_app_notification_action", {"action": action, "reply_text": "prelavaggio"})
+    await hass.async_block_till_done()
+    assert hass.states.get(STATUS).attributes["last_cycle"]["program"] == "Prelavaggio"
+    assert list(hass.states.get(PROGRAM).attributes["known_programs"]) == ["Prelavaggio"]

@@ -96,8 +96,12 @@ higher threshold (e.g. 4 W) the drying is left out of the cycle.
 the same profile are grouped into one program (`Program 1`, `Program 2`, ...).
 Give them meaningful names from **Configure**.
 
-When a cycle matches no known program, besides the "finished" notification you
-are asked **"which program was it?"**: mobile app notifications
+When **30 minutes** after its start a cycle still matches no known program you
+are asked **"which program is it?"**: with the answer the cycle takes that
+program (counting down from its display duration) and is stored under that
+name. If the program is recognised earlier, no question is sent. A cycle of a
+new program shorter than 30 minutes is instead asked about when it finishes,
+**"which program was it?"**: mobile app notifications
 (`notify.mobile_app_...`) have a *Reply* button, just type the name (e.g.
 `intenso`; it is written like the display durations entry). The question also
 appears in the Home Assistant notifications and the
@@ -172,7 +176,9 @@ data:
 
 `appliance_cycle_started`, `appliance_cycle_finished` and
 `appliance_cycle_unknown_program` (a cycle of a program never seen before:
-`program` is the automatic name, `duration` in seconds) are fired on the bus.
+`running` is `true` when asked while it runs, with `started`; at the end
+`program` is the automatic name and `duration` is in seconds) are fired on the
+bus.
 The *finished* event carries `name`, `program`, `started`, `ended`,
 `duration` (s) and `energy` (Wh).
 

@@ -98,8 +98,12 @@ display. Con soglie più alte (es. 4 W) l'asciugatura resta fuori dal ciclo.
 consumo. Cicli con lo stesso profilo formano un programma (`Programma 1`,
 `Programma 2`, ...), che puoi rinominare da **Configura**.
 
-Quando un ciclo non corrisponde a nessun programma conosciuto, oltre alla
-notifica di fine arriva la domanda **«che programma era?»**: sulle notifiche
+Quando dopo **30 minuti** dall'avvio il ciclo non corrisponde ancora a nessun
+programma conosciuto arriva la domanda **«che programma è?»**: rispondendo, il
+ciclo prende quel programma (con il conto alla rovescia della durata del
+display) e viene salvato con quel nome. Se il programma viene riconosciuto
+prima, la domanda non parte. Un ciclo più corto di 30 minuti mai visto riceve
+invece, a fine ciclo, la domanda **«che programma era?»**: sulle notifiche
 dell'app (`notify.mobile_app_...`) c'è il pulsante *Rispondi*, basta scrivere
 il nome (es. `intenso`, viene scritto come nelle durate del display). La
 domanda compare anche nelle notifiche di Home Assistant e viene emesso
@@ -173,8 +177,9 @@ data:
 ## Eventi e automazioni
 
 Sul bus vengono emessi `appliance_cycle_started`, `appliance_cycle_finished`
-e `appliance_cycle_unknown_program` (ciclo di un programma mai visto: `program`
-è il nome automatico, `duration` in secondi).
+e `appliance_cycle_unknown_program` (ciclo di un programma mai visto: `running`
+vale `true` se la domanda parte durante il lavaggio, con `started`; a fine ciclo
+`program` è il nome automatico e `duration` è in secondi).
 L'evento di fine contiene `name`, `program`, `started`, `ended`, `duration`
 (s) ed `energy` (Wh).
 

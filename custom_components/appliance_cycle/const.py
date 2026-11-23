@@ -58,6 +58,9 @@ RESUME_MARGIN = 30 * 60  # seconds
 # before its display duration minus this margin (seconds): the drying of some
 # programs (Eco) stays at 0 W for long stretches.
 HOLD_MARGIN = 10 * 60
+# A cycle still not recognised after this long (seconds from its start) makes
+# the integration ask the user which program is running.
+ASK_AFTER = 30 * 60
 # Days of history scanned by default by the import_history service
 DEFAULT_IMPORT_DAYS = 10
 

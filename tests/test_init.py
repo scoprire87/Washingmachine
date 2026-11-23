@@ -143,10 +143,10 @@ async def test_learns_and_recognises_programs(hass, freezer):
     assert finished[0].data["duration"] / 60 == pytest.approx(150.6, abs=0.5)
     assert float(hass.states.get(ENERGY).state) == pytest.approx(0.87, abs=0.02)
     assert len(notify) == 2
-    assert notify[0].data["title"] == "Dishwasher: finished"
-    assert "Program 1 finished after 2 h 31 min" in notify[0].data["message"]
-    # a program never seen before: the user is asked which one it was
-    assert notify[1].data["title"] == "Dishwasher: which program was it?"
+    # not recognised after 30 minutes: the user is asked which program it is
+    assert notify[0].data["title"] == "Dishwasher: which program is it?"
+    assert notify[1].data["title"] == "Dishwasher: finished"
+    assert "Program 1 finished after 2 h 31 min" in notify[1].data["message"]
 
     # the user names the program
     await hass.services.async_call(
