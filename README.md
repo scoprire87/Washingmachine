@@ -46,7 +46,10 @@ Then open **Configure** on the entry. The menu offers:
 - **Program durations (display)**: one program per line with the duration the
   appliance display shows, for example `Intenso 3:16`. When the running cycle
   is recognised as one of them, the remaining time counts down from that
-  duration, like the display;
+  duration, like the display. The cycle is not considered finished before that
+  duration minus 10 minutes (the drying of some programs, like Eco, stays at
+  0 W even for an hour) and the recognised program is kept even if the end of
+  the cycle does not look like the stored runs;
 - **Load the preset programs** (dishwasher): programs recorded from a real
   dishwasher, useful if you have the same model. Learned programs with an
   automatic name that match one of them take its name;
@@ -93,8 +96,15 @@ higher threshold (e.g. 4 W) the drying is left out of the cycle.
 the same profile are grouped into one program (`Program 1`, `Program 2`, ...).
 Give them meaningful names from **Configure**.
 
-When a cycle matches no known program, besides the "finished" notification you
-are asked **"which program was it?"**: mobile app notifications
+When **30 minutes** after its start a cycle still matches no known program you
+are asked **"which program is it?"**. Answer with the name and the time left
+on the display, e.g. `Eco 2:41` (or `Eco 161`): the cycle takes that program,
+its total duration is the time elapsed plus the time given, the remaining time
+follows it and the cycle is stored under that name. A program without a
+display duration yet gets it. The name alone also works: the stored display
+duration is used. If the program is recognised earlier, no question is sent. A cycle of a
+new program shorter than 30 minutes is instead asked about when it finishes,
+**"which program was it?"**: mobile app notifications
 (`notify.mobile_app_...`) have a *Reply* button, just type the name (e.g.
 `intenso`; it is written like the display durations entry). The question also
 appears in the Home Assistant notifications and the
@@ -169,7 +179,9 @@ data:
 
 `appliance_cycle_started`, `appliance_cycle_finished` and
 `appliance_cycle_unknown_program` (a cycle of a program never seen before:
-`program` is the automatic name, `duration` in seconds) are fired on the bus.
+`running` is `true` when asked while it runs, with `started`; at the end
+`program` is the automatic name and `duration` is in seconds) are fired on the
+bus.
 The *finished* event carries `name`, `program`, `started`, `ended`,
 `duration` (s) and `energy` (Wh).
 

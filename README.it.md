@@ -46,7 +46,10 @@ Poi apri **Configura**. Il menu offre:
 - **Durate dei programmi (display)**: un programma per riga con la durata
   indicata dal display, ad esempio `Intenso 3:16`. Quando il ciclo è
   riconosciuto come uno di questi programmi, il tempo rimanente è un conto alla
-  rovescia da quella durata, come sul display;
+  rovescia da quella durata, come sul display. Il ciclo non viene considerato
+  finito prima di quella durata meno 10 minuti (l'asciugatura di alcuni
+  programmi, come l'Eco, resta a 0 W anche per un'ora) e il programma
+  riconosciuto resta anche se la fine del ciclo non somiglia ai lavaggi salvati;
 - **Carica i programmi preimpostati** (lavastoviglie): programmi registrati da
   una lavastoviglie reale, utili se hai lo stesso modello. I programmi imparati
   con un nome automatico che corrispondono a uno di questi ne prendono il nome;
@@ -95,8 +98,16 @@ display. Con soglie più alte (es. 4 W) l'asciugatura resta fuori dal ciclo.
 consumo. Cicli con lo stesso profilo formano un programma (`Programma 1`,
 `Programma 2`, ...), che puoi rinominare da **Configura**.
 
-Quando un ciclo non corrisponde a nessun programma conosciuto, oltre alla
-notifica di fine arriva la domanda **«che programma era?»**: sulle notifiche
+Quando dopo **30 minuti** dall'avvio il ciclo non corrisponde ancora a nessun
+programma conosciuto arriva la domanda **«che programma è?»**. Si risponde con
+il nome e il tempo che manca sul display, ad esempio `Eco 2:41` (oppure
+`Eco 161`): il ciclo prende quel programma, la durata totale è il tempo già
+trascorso più quello indicato, il tempo rimanente segue quella durata e il
+ciclo viene salvato con quel nome. Se il programma non aveva ancora una durata
+del display, gli viene assegnata. Basta anche solo il nome: in quel caso vale
+la durata del display già salvata. Se il programma viene riconosciuto
+prima, la domanda non parte. Un ciclo più corto di 30 minuti mai visto riceve
+invece, a fine ciclo, la domanda **«che programma era?»**: sulle notifiche
 dell'app (`notify.mobile_app_...`) c'è il pulsante *Rispondi*, basta scrivere
 il nome (es. `intenso`, viene scritto come nelle durate del display). La
 domanda compare anche nelle notifiche di Home Assistant e viene emesso
@@ -170,8 +181,9 @@ data:
 ## Eventi e automazioni
 
 Sul bus vengono emessi `appliance_cycle_started`, `appliance_cycle_finished`
-e `appliance_cycle_unknown_program` (ciclo di un programma mai visto: `program`
-è il nome automatico, `duration` in secondi).
+e `appliance_cycle_unknown_program` (ciclo di un programma mai visto: `running`
+vale `true` se la domanda parte durante il lavaggio, con `started`; a fine ciclo
+`program` è il nome automatico e `duration` è in secondi).
 L'evento di fine contiene `name`, `program`, `started`, `ended`, `duration`
 (s) ed `energy` (Wh).
 

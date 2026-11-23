@@ -178,6 +178,9 @@ class CycleDetector:
         self.cycle: Cycle | None = None
         self._low_since: float | None = None
         self._last: tuple[float, float] | None = None
+        # The cycle cannot end before this time (set when the program and its
+        # duration are known: some drying phases stay at 0 W for long).
+        self.hold_until: float | None = None
 
     @property
     def low_since(self) -> float | None:
@@ -193,6 +196,7 @@ class CycleDetector:
             if self.state == IDLE:
                 self.state = PENDING
                 self.cycle = Cycle(start=timestamp)
+                self.hold_until = None
             assert self.cycle is not None
             self.cycle.samples.append((timestamp, power))
             if self.state == PENDING and power >= self.start_power:
@@ -211,10 +215,12 @@ class CycleDetector:
             self.state == IDLE
             or self._low_since is None
             or now - self._low_since < self.end_delay
+            or (self.hold_until is not None and now < self.hold_until)
         ):
             return []
 
         cycle = self.cycle
+        self.hold_until = None
         ended_at = self._low_since
         was_running = self.state == RUNNING
         self.state = IDLE
@@ -230,7 +236,10 @@ class CycleDetector:
         """When :meth:`tick` should be called to close the cycle."""
         if self.state == IDLE or self._low_since is None:
             return None
-        return self._low_since + self.end_delay
+        deadline = self._low_since + self.end_delay
+        if self.hold_until is not None:
+            deadline = max(deadline, self.hold_until)
+        return deadline
 
 
 def detect_cycles(
@@ -543,6 +552,19 @@ def format_duration(seconds: float) -> str:
     """Seconds as "H:MM"."""
     hours, minutes = divmod(round(seconds / 60), 60)
     return f"{hours}:{minutes:02d}"
+
+
+def parse_program_reply(text: str) -> tuple[str, float | None]:
+    """A typed answer: program name, optionally followed by a duration.
+
+    "Eco 2:41" -> ("Eco", 9660.0); "eco rapido" -> ("eco rapido", None).
+    """
+    text = " ".join(text.split())
+    try:
+        [(name, seconds)] = parse_durations_text(text).items()
+    except ValueError:
+        return text, None
+    return name, seconds
 
 
 def parse_durations_text(text: str) -> dict[str, float]:
